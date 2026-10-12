@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 
@@ -20,6 +20,40 @@ class Settings(BaseSettings):
     db_pool_timeout_seconds: int = Field(default=10, ge=1, le=120)
     db_connect_timeout_seconds: int = Field(default=3, ge=1, le=30)
     db_statement_timeout_ms: int = Field(default=5000, ge=100, le=60000)
+
+    etl_batch_size: int = Field(default=500, ge=1, le=1000)
+    etl_overlap_seconds: int = Field(default=60, ge=0, le=3600)
+    etl_initial_lookback_seconds: int = Field(default=120, ge=1, le=86400)
+    etl_max_window_seconds: int = Field(default=3600, ge=1, le=86400)
+    etl_source_max_attempts: int = Field(default=3, ge=1, le=10)
+    etl_retry_base_seconds: float = Field(default=0.25, ge=0, le=10)
+    etl_retry_max_seconds: float = Field(default=5, ge=0, le=60)
+    telemetry_interval_seconds: int = Field(default=30, ge=1, le=3600)
+    simulator_server_count: int = Field(default=75, ge=50, le=100)
+    simulator_seed: int = 7
+    simulator_malformed_rate: float = Field(default=0.01, ge=0, le=0.1)
+    host_enabled: bool = False
+    host_source_id: str = "host-local"
+    host_external_server_id: str = "local-host"
+    host_region_code: str = "local"
+    host_environment: Literal["dev", "staging", "prod"] = "dev"
+    host_disk_path: str = "."
+    host_sample_seconds: int = Field(default=1, ge=1, le=30)
+
+    @model_validator(mode="after")
+    def validate_ingestion_bounds(self):
+        if self.etl_max_window_seconds < self.etl_overlap_seconds + self.telemetry_interval_seconds:
+            raise ValueError("ETL maximum window must fit overlap plus one telemetry interval")
+        if self.etl_initial_lookback_seconds < self.telemetry_interval_seconds:
+            raise ValueError("Initial lookback must include at least one telemetry interval")
+        return self
+
+    @field_validator("host_source_id", "host_external_server_id", "host_region_code")
+    @classmethod
+    def nonblank_host_identity(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Host identifiers must not be blank")
+        return value.strip()
 
     @field_validator("database_url")
     @classmethod

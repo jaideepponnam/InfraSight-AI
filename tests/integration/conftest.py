@@ -1,4 +1,5 @@
 import os
+from contextlib import contextmanager
 from pathlib import Path
 from uuid import uuid4
 
@@ -11,8 +12,8 @@ from sqlalchemy.engine import make_url
 from infrasight.db import models  # noqa: F401
 
 
-@pytest.fixture(scope="session")
-def domain_engine():
+@contextmanager
+def disposable_database():
     url = os.getenv("TEST_DATABASE_URL")
     if not url:
         pytest.skip("Set TEST_DATABASE_URL to enable disposable PostgreSQL schema tests")
@@ -40,6 +41,19 @@ def domain_engine():
             with admin.connect() as connection:
                 connection.execute(text(f'DROP DATABASE "{database_name}" WITH (FORCE)'))
         admin.dispose()
+
+
+@pytest.fixture(scope="session")
+def domain_engine():
+    with disposable_database() as engine:
+        yield engine
+
+
+@pytest.fixture(scope="session")
+def etl_engine():
+    # ETL commits real batches; keep them out of the schema tests' transaction fixture.
+    with disposable_database() as engine:
+        yield engine
 
 
 @pytest.fixture
