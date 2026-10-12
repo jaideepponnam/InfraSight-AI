@@ -14,6 +14,12 @@ dependencies = [
   "psycopg[binary]>=3.2,<4", "alembic>=1.14,<2", "structlog>=25,<26",
 ]
 
+[project.optional-dependencies]
+host = ["psutil>=6,<8"]
+
+[project.scripts]
+infrasight-etl = "infrasight.ingestion.cli:main"
+
 [dependency-groups]
 dev = ["pytest>=8.3,<9", "httpx>=0.28,<1", "ruff>=0.9,<1"]
 

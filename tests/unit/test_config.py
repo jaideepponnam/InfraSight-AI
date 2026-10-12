@@ -25,3 +25,16 @@ def test_rejects_invalid_database_url(url):
 def test_rejects_unbounded_pool(settings):
     with pytest.raises(ValidationError):
         Settings(_env_file=None, database_url=settings.database_url, db_pool_size=0)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"etl_batch_size": 1001},
+        {"etl_max_window_seconds": 89},
+        {"etl_initial_lookback_seconds": 29},
+    ],
+)
+def test_ingestion_configuration_prevents_unbounded_or_stalled_windows(settings, overrides):
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, database_url=settings.database_url, **overrides)

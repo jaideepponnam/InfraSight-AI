@@ -2,11 +2,11 @@
 
 Cloud infrastructure intelligence platform: telemetry extraction → validated ETL → PostgreSQL analytics → controlled AI tools → operations dashboard.
 
-## Current milestone: Phase 2
+## Current milestone: Phase 3
 
 Implemented: installable Python 3.11 backend, validated environment settings, structured JSON logging, FastAPI health endpoints, pooled PostgreSQL sessions, and Alembic foundation.
 
-Phase 2 adds seven domain tables and Alembic revision 0001. ETL, analytics views, AI, and the dashboard remain future phases. No automatic Git commits are made.
+Phase 2 adds seven domain tables and Alembic revision 0001. Phase 3 adds deterministic cloud telemetry, optional real host collection, and a transactional one-cycle ETL CLI with source locks, rejection auditing, replay, and watermarks. Analytics views, the dashboard, AI, and domain APIs remain future phases. No automatic Git commits are made.
 
 ## Local development (Windows PowerShell)
 
@@ -86,3 +86,13 @@ Integration tests check connectivity, transaction cleanup, readiness, schema con
 ## Design rationale
 
 A modular monolith keeps future ingestion, analytics, and AI business logic together while allowing separate API and worker processes. PostgreSQL provides a durable relational analytics store. Explicit migrations avoid hidden startup schema changes. Separate liveness/readiness endpoints distinguish process availability from dependency availability. Bounded pools/timeouts and secret-safe structured logs provide operational foundations before features are added.
+
+## Telemetry and ETL (Phase 3)
+
+    .\.venv\Scripts\infrasight-etl.exe run --source simulator
+
+The simulator emits 75 servers across three regions/environments on 30-second intervals with meaningful behavioral profiles. Each invocation extracts a bounded completed window, saves raw data, validates/transforms it, batch-loads metrics/rejections, and updates run statistics and committed progress. Repeated runs use overlap and database uniqueness for idempotency. A scheduler is a later milestone.
+
+For a full 75-server first-ingestion/replay/incremental demonstration, follow [the Phase 3 demo](docs/phase3_demo.md). See [ETL design](docs/etl_design.md) for transaction, retry, health-policy, and locking decisions. [The data dictionary](docs/data_dictionary.md) remains authoritative for schema semantics.
+
+Host collection is optional: install with uv sync --locked --extra host, enable HOST_ENABLED, and run infrasight-etl run --source host. It captures current host data; historical replay uses previously stored host events. Simulator and host data have distinct source IDs. No extra dependency is needed for simulated ingestion.
