@@ -15,7 +15,7 @@ def test_environment_loading(monkeypatch):
     assert Settings(_env_file=None).db_pool_size == 7
 
 
-@pytest.mark.parametrize("url", ["sqlite:///test.db", "broken-secret", "postgresql://a/b"])
+@pytest.mark.parametrize("url", ["sqlite:///test.db", "broken-secret", "postgresql:///b"])
 def test_rejects_invalid_database_url(url):
     with pytest.raises(ValidationError) as error:
         Settings(_env_file=None, database_url=url)

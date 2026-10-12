@@ -8,6 +8,7 @@ import {
   aiBody,
   query,
   RATE_LIMIT_MESSAGE,
+  resolveAPIBase,
   snapshot,
 } from "../api";
 import { AIAnalyst, SUGGESTIONS } from "../App";
@@ -15,6 +16,33 @@ import { money, percent, telemetryState } from "../format";
 import type { Overview } from "../types";
 afterEach(() => vi.unstubAllGlobals());
 describe("HTTP client", () => {
+  it("uses configured production API origin and preserves the local proxy", () => {
+    expect(resolveAPIBase("https://api.jaideepponnam.com", true)).toBe(
+      "https://api.jaideepponnam.com",
+    );
+    expect(resolveAPIBase("http://127.0.0.1:8001", false)).toBe("");
+  });
+  it.each([
+    "http://remote.example",
+    "https://user:secret@api.example",
+    "https://api.example/path",
+    "https://api.example?key=secret",
+  ])("rejects unsafe production origin %s", (raw) => {
+    expect(() => resolveAPIBase(raw, true)).toThrow();
+  });
+  it("sends production requests directly to the configured API", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ data: {}, meta: {} })));
+    vi.stubGlobal("fetch", fetcher);
+    await new APIClient(
+      "public-demo-read",
+      "https://api.jaideepponnam.com",
+    ).overview(snapshot());
+    expect(fetcher.mock.calls[0][0]).toMatch(
+      /^https:\/\/api.jaideepponnam.com\/api\/v1\/analytics\/overview\?/,
+    );
+  });
   it("sends only read authorization with structural snapshot context", async () => {
     const fetcher = vi
       .fn()
@@ -38,14 +66,12 @@ describe("HTTP client", () => {
   it.each([401, 422, 429, 502, 503])(
     "sanitizes HTTP %s without retries",
     async (status) => {
-      const fetcher = vi
-        .fn()
-        .mockResolvedValue(
-          new Response("provider-secret-detail", {
-            status,
-            headers: { "X-Request-ID": "ref" },
-          }),
-        );
+      const fetcher = vi.fn().mockResolvedValue(
+        new Response("provider-secret-detail", {
+          status,
+          headers: { "X-Request-ID": "ref" },
+        }),
+      );
       vi.stubGlobal("fetch", fetcher);
       await expect(
         new APIClient().ask("Question", snapshot()),

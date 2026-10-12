@@ -2,7 +2,7 @@
 
 Configure GROQ_API_KEY privately through environment/settings. Never paste it into source,
 logs, documentation, examples, or screenshots. GROQ_MODEL defaults to
-llama-3.3-70b-versatile. Other settings: GROQ_TIMEOUT_SECONDS=20,
+openai/gpt-oss-120b. Other settings: GROQ_TIMEOUT_SECONDS=20,
 AI_REQUEST_TIMEOUT_SECONDS=60, AI_MAX_RESULT_ROWS=20. httpx is a runtime dependency.
 The provider protocol can later support watsonx without changing analytics tools.
 
@@ -82,3 +82,10 @@ service integration; they consume no Groq quota. The LLM explanation remains gen
 text: the attached backend evidence is the auditable source of truth.
 
 Protocol reference: [Groq local tool calling](https://console.groq.com/docs/tool-use/overview).
+
+Model deployment note: openai/gpt-oss-120b supports the existing local function-calling
+contract; parallel tool calls remain disabled. Extra provider reasoning fields are ignored
+by the existing response parser and are not returned as answers or evidence. See
+[Groq tool support](https://console.groq.com/docs/tool-use/overview). Explicit GROQ_MODEL
+environment overrides must also use the new model; changing a default does not replace
+a configured override. GROQ_MODEL and GROQ_API_KEY remain backend-only.

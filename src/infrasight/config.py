@@ -1,5 +1,6 @@
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -14,6 +15,17 @@ class Settings(BaseSettings):
     app_name: str = "InfraSight-AI"
     app_env: Literal["development", "test", "production"] = "development"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    cors_allowed_origins: list[str] = Field(
+        default_factory=lambda: [
+            "https://jaideepponnam.com",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:5174",
+            "http://127.0.0.1:5174",
+            "http://localhost:4173",
+            "http://127.0.0.1:4173",
+        ]
+    )
     database_url: SecretStr
     db_pool_size: int = Field(default=5, ge=1, le=50)
     db_max_overflow: int = Field(default=5, ge=0, le=50)
@@ -29,7 +41,7 @@ class Settings(BaseSettings):
     api_read_key: SecretStr | None = None
     api_admin_key: SecretStr | None = None
     groq_api_key: SecretStr | None = None
-    groq_model: str = Field(default="llama-3.3-70b-versatile", min_length=1, max_length=128)
+    groq_model: str = Field(default="openai/gpt-oss-120b", min_length=1, max_length=128)
     groq_timeout_seconds: float = Field(default=20, ge=1, le=60)
     ai_request_timeout_seconds: float = Field(default=60, ge=1, le=120)
     ai_max_result_rows: int = Field(default=20, ge=1, le=50)
@@ -63,6 +75,16 @@ class Settings(BaseSettings):
             raise ValueError("Initial lookback must include at least one telemetry interval")
         return self
 
+    @model_validator(mode="after")
+    def separate_api_keys(self):
+        if (
+            self.api_read_key
+            and self.api_admin_key
+            and self.api_read_key.get_secret_value() == self.api_admin_key.get_secret_value()
+        ):
+            raise ValueError("Read and admin API keys must be different")
+        return self
+
     @field_validator("host_source_id", "host_external_server_id", "host_region_code")
     @classmethod
     def nonblank_host_identity(cls, value: str) -> str:
@@ -70,17 +92,45 @@ class Settings(BaseSettings):
             raise ValueError("Host identifiers must not be blank")
         return value.strip()
 
+    @field_validator("cors_allowed_origins")
+    @classmethod
+    def validate_cors_origins(cls, values: list[str]) -> list[str]:
+        for value in values:
+            origin = urlsplit(value)
+            if (
+                origin.scheme not in {"http", "https"}
+                or not origin.hostname
+                or origin.username is not None
+                or origin.password is not None
+                or origin.path
+                or origin.query
+                or origin.fragment
+                or "*" in value
+            ):
+                raise ValueError("CORS requires explicit HTTP origins without paths or wildcards")
+        return values
+
     @field_validator("database_url")
     @classmethod
     def validate_database_url(cls, value: SecretStr) -> SecretStr:
         try:
             url = make_url(value.get_secret_value())
-            valid = url.drivername == "postgresql+psycopg" and url.host and url.database
+            valid = (
+                url.drivername in {"postgres", "postgresql", "postgresql+psycopg"}
+                and url.host
+                and url.database
+            )
         except Exception:
             valid = False
         if not valid:
             raise ValueError("A PostgreSQL psycopg URL with host and database is required")
-        return value
+        if url.host.lower().endswith(".neon.tech"):
+            if "-pooler" in url.host.lower():
+                raise ValueError("Use the Neon direct endpoint to preserve session advisory locks")
+            if url.query.get("sslmode") not in {"require", "verify-ca", "verify-full"}:
+                raise ValueError("Neon connections require TLS in the connection URL")
+        normalized = url.set(drivername="postgresql+psycopg").render_as_string(hide_password=False)
+        return SecretStr(normalized)
 
 
 @lru_cache

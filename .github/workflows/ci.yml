@@ -1,0 +1,61 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: infrasight_ci
+          POSTGRES_USER: infrasight
+          POSTGRES_PASSWORD: ci-only-password
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U infrasight -d infrasight_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+psycopg://infrasight:ci-only-password@localhost:5432/infrasight_ci
+      TEST_DATABASE_URL: postgresql+psycopg://infrasight:ci-only-password@localhost:5432/infrasight_ci
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.0"
+          python-version: "3.11"
+      - run: uv sync --frozen --all-extras
+      - run: uv run --frozen --no-sync ruff check .
+      - run: uv run --frozen --no-sync ruff format --check src/infrasight/config.py src/infrasight/main.py tests/unit/test_production.py scripts/validate_deployment.py
+      - run: uv run --frozen --no-sync python scripts/validate_deployment.py
+      - run: uv run --frozen --no-sync alembic upgrade head
+      - run: uv run --frozen --no-sync alembic check
+      - run: uv run --frozen --no-sync pytest -q
+      # Migration downgrade/re-upgrade runs only in uniquely named disposable test DBs.
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      VITE_API_BASE_URL: https://api.jaideepponnam.com
+      VITE_API_READ_KEY: ci-public-demo-key
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.15.1"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run build

@@ -26,9 +26,9 @@ Open http://127.0.0.1:5173. If ports are occupied, leave existing services untou
 
 ## Data and security
 
-Browser fetches same-origin /api/v1 paths. Vite proxies only /api to VITE_API_BASE_URL (default http://127.0.0.1:8000). This avoids local cross-origin requests; FastAPI CORS is unchanged. VITE_API_BASE_URL is the proxy target, not a browser direct-fetch URL. Vite preview has the same local proxy. A future production host needs an equivalent same-origin reverse proxy; deployment is outside this phase.
+Development browser requests use same-origin /api/v1 paths through Vite’s proxy to VITE_API_BASE_URL (default http://127.0.0.1:8000). Production builds and Vite preview call the configured API origin directly. FastAPI permits explicit configured origins and retains localhost development support. Render static hosting needs no Vite proxy; see [the deployment runbook](../docs/deployment.md).
 
-VITE\_\* configuration is browser-visible. Use only the read-scoped demo key, never admin, database or LLM keys. This is a demo client, not a secret vault or user authentication system. Restrict/rotate the demo read key before any public deployment. No administrative ETL endpoint is called.
+VITE_* configuration is browser-visible by design. VITE_API_READ_KEY is a public/demo credential, not a confidential secret. Match the dedicated backend read key; never configure admin, database or provider secrets on the static site. The application’s ETL endpoints retain separate admin authorization.
 
 Money is parsed with decimal.js and never converted to Number. Number conversion is used only for utilization bar geometry. Coverage and freshness use backend values; reporting counts and observation-time percentages are distinct. The two compact visualizations use accessible CSS bars, avoiding an extra chart stack.
 
@@ -47,6 +47,6 @@ npm.cmd test
 npm.cmd run build
 ```
 
-Tests fake fetch/provider responses. No real AI calls or ETL writes are needed. Deferred: deployment, automatic refresh, conversation persistence, inventory editing and extended dashboards.
+Tests fake fetch/provider responses. No real AI calls or ETL writes are needed. Deferred: automatic refresh, conversation persistence, inventory editing and extended dashboards.
 
 Design references: [Carbon React](https://www.carbondesignsystem.com/getting-started/developing/carbon-core/react), [Vite proxy](https://vite.dev/config/server-options#server-proxy). InfraSight AI is an independent project and uses no IBM branding.

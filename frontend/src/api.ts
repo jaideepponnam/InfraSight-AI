@@ -65,13 +65,37 @@ export function aiBody(question: string, context: Context) {
   const { mode: _mode, ...scope } = context;
   return { question: question.trim(), ...scope };
 }
+export function resolveAPIBase(raw: string, production: boolean): string {
+  if (!production) return ""; // Local Vite proxy preserves the development setup.
+  const url = new URL(raw);
+  const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  if (
+    (url.protocol !== "https:" && !(local && url.protocol === "http:")) ||
+    url.username ||
+    url.password ||
+    url.pathname !== "/" ||
+    url.search ||
+    url.hash
+  )
+    throw new Error(
+      "Configure a valid API origin without credentials or paths.",
+    );
+  return url.origin;
+}
+
 export class APIClient {
-  constructor(private key = import.meta.env.VITE_API_READ_KEY || "") {}
+  constructor(
+    private key = import.meta.env.VITE_API_READ_KEY || "",
+    private baseURL = resolveAPIBase(
+      import.meta.env.VITE_API_BASE_URL || "",
+      import.meta.env.PROD,
+    ),
+  ) {}
   async request<T>(path: string, body?: unknown): Promise<T> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), body ? 70000 : 15000);
     try {
-      const response = await fetch("/api/v1/" + path, {
+      const response = await fetch(this.baseURL + "/api/v1/" + path, {
         method: body ? "POST" : "GET",
         headers: {
           "X-API-Key": this.key,

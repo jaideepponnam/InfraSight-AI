@@ -359,3 +359,46 @@ def test_invalid_provider_response(settings, body):
     transport = httpx.MockTransport(lambda request: httpx.Response(200, json=body))
     with pytest.raises(AIError, match="AI_PROVIDER_INVALID_RESPONSE"):
         asyncio.run(GroqProvider(settings, transport).complete([], [], "none"))
+
+
+def test_gpt_oss_120b_groq_tool_round_trip(settings, context, service):
+    """One mocked round trip exercises the real provider, harness and tool registry."""
+    from infrasight.config import Settings
+
+    assert Settings.model_fields["groq_model"].default == "openai/gpt-oss-120b"
+    settings.groq_model = "openai/gpt-oss-120b"
+    settings.groq_api_key = SecretStr("synthetic-test-key")
+    captured = []
+
+    def respond(request):
+        payload = json.loads(request.content)
+        captured.append(payload)
+        assert payload["model"] == "openai/gpt-oss-120b"
+        assert payload["parallel_tool_calls"] is False
+        assert {tool["function"]["name"] for tool in payload["tools"]} == set(TOOLS)
+        assert all(tool["type"] == "function" for tool in payload["tools"])
+        assert "synthetic-test-key" not in json.dumps(payload)
+        if len(captured) == 1:
+            assert payload["tool_choice"] == "required"
+            message = call().model_dump(exclude_none=True)
+        else:
+            assert payload["tool_choice"] == "auto"
+            assert payload["messages"][-1]["role"] == "tool"
+            assert json.loads(payload["messages"][-1]["content"])["rows"][0]["stale_servers"] == 75
+            message = {"role": "assistant", "content": "The recorded fleet is stale."}
+        # GPT-OSS may supply this extra field; it must not become user-facing content.
+        message["reasoning"] = "synthetic-private-reasoning"
+        return httpx.Response(200, json={"choices": [{"message": message}]})
+
+    provider = GroqProvider(settings, httpx.MockTransport(respond))
+    response = asyncio.run(
+        AnalyticsHarness(provider, service, settings).query(context, "model-migration")
+    )
+    assert len(captured) == 2
+    service.overview.assert_called_once()
+    assert response.answer == "The recorded fleet is stale."
+    assert response.evidence.tools_used == ["get_overview"]
+    assert response.evidence.reference_time == END
+    assert response.evidence.tool_results[0].result["rows"][0]["observed_cost"] == "1.03775797"
+    assert "synthetic-private-reasoning" not in response.model_dump_json()
+    assert "synthetic-private-reasoning" not in json.dumps(captured)

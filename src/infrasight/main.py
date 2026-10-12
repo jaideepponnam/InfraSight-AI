@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import structlog
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from infrasight.api.errors import install_handlers
@@ -32,6 +33,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             logger.info("application_stopped")
 
     app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_allowed_origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST"],
+        allow_headers=["X-API-Key", "Content-Type"],
+        expose_headers=["X-Request-ID"],
+        max_age=600,
+    )
     app.state.settings = settings
     app.include_router(router)
     app.include_router(business_router)

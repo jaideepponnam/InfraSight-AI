@@ -114,3 +114,7 @@ The ETL pipeline, validation, PostgreSQL storage, analytics, REST APIs, AI tool 
 **Raw Infrastructure Data → Trusted Analytics → Evidence-Grounded AI**
 
 > Reliable data first. AI second.
+
+## Public deployment
+
+Render static frontend + Render FastAPI service + Neon direct PostgreSQL + Cloudflare DNS. See [the deployment runbook](docs/deployment.md) for initialization, environment boundaries, CI, and exact domain configuration. Deployment is manual; no startup seeding is performed.
