@@ -18,14 +18,14 @@ def test_downgrade_reupgrade_and_metadata_match(domain_engine):
     config = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
     with domain_engine.begin() as connection:
         config.attributes["connection"] = connection
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0001"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0002"
         command.downgrade(config, "base")
         assert set(inspect(connection).get_table_names()) == {"alembic_version"}
         command.upgrade(config, "head")
         assert set(inspect(connection).get_table_names()) == set(Base.metadata.tables) | {
             "alembic_version"
         }
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0001"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0002"
         context = MigrationContext.configure(
             connection, opts={"compare_type": True, "compare_server_default": True}
         )

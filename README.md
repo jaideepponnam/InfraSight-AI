@@ -2,11 +2,11 @@
 
 Cloud infrastructure intelligence platform: telemetry extraction → validated ETL → PostgreSQL analytics → controlled AI tools → operations dashboard.
 
-## Current milestone: Phase 3
+## Current milestone: Phase 4
 
 Implemented: installable Python 3.11 backend, validated environment settings, structured JSON logging, FastAPI health endpoints, pooled PostgreSQL sessions, and Alembic foundation.
 
-Phase 2 adds seven domain tables and Alembic revision 0001. Phase 3 adds deterministic cloud telemetry, optional real host collection, and a transactional one-cycle ETL CLI with source locks, rejection auditing, replay, and watermarks. Analytics views, the dashboard, AI, and domain APIs remain future phases. No automatic Git commits are made.
+Phase 2 adds seven domain tables and Alembic revision 0001. Phase 3 adds deterministic cloud telemetry, optional real host collection, and a transactional one-cycle ETL CLI with source locks, rejection auditing, replay, and watermarks. Phase 4 adds six stable analytics views and explicit parameterized business services. The dashboard, AI, and domain APIs remain future phases. No automatic Git commits are made.
 
 ## Local development (Windows PowerShell)
 
@@ -47,7 +47,7 @@ Open http://127.0.0.1:8000/docs for API documentation.
 
 ## Configuration
 
-.env.example lists all Phase 1 settings. DATABASE_URL is required. Only the postgresql+psycopg driver is accepted. Pool limits, connection timeout, pool checkout timeout, and PostgreSQL statement timeout are bounded and configurable. Settings redact the database URL in representations and validation error strings.
+.env.example lists database, ingestion, and analytics service settings. DATABASE_URL is required. Only the postgresql+psycopg driver is accepted. Pool limits, connection timeout, pool checkout timeout, and PostgreSQL statement timeout are bounded and configurable. Settings redact the database URL in representations and validation error strings.
 
 A SQLAlchemy engine is created during application lifespan and disposed at shutdown. Sessions close after each request and roll back uncommitted work. Future write services must explicitly commit transactions. No implicit schema creation occurs on startup.
 
@@ -72,7 +72,7 @@ Database tests skip unless TEST_DATABASE_URL is explicitly set. After configurin
     .\.venv\Scripts\alembic.exe current
     Remove-Item Env:TEST_DATABASE_URL
 
-Integration tests check connectivity, transaction cleanup, readiness, schema constraints, deduplication, restricted deletes, and migration downgrade/re-upgrade. New schema tests automatically create and remove a uniquely named disposable database on the configured container; the local bootstrap account needs CREATEDB permission. They never downgrade the application database. Alembic current should report 0001 (head). Run alembic check to verify metadata consistency. See [the data dictionary](docs/data_dictionary.md) for all columns, constraints, indexes, and source_id conventions.
+Integration tests check connectivity, transaction cleanup, readiness, schema constraints, deduplication, restricted deletes, and migration downgrade/re-upgrade. New schema tests automatically create and remove a uniquely named disposable database on the configured container; the local bootstrap account needs CREATEDB permission. They never downgrade the application database. Alembic current should report 0002 (head). Run alembic check to verify metadata consistency. See [the data dictionary](docs/data_dictionary.md) for all columns, constraints, indexes, and source_id conventions.
 
 ## Layout
 
@@ -96,3 +96,14 @@ The simulator emits 75 servers across three regions/environments on 30-second in
 For a full 75-server first-ingestion/replay/incremental demonstration, follow [the Phase 3 demo](docs/phase3_demo.md). See [ETL design](docs/etl_design.md) for transaction, retry, health-policy, and locking decisions. [The data dictionary](docs/data_dictionary.md) remains authoritative for schema semantics.
 
 Host collection is optional: install with uv sync --locked --extra host, enable HOST_ENABLED, and run infrasight-etl run --source host. It captures current host data; historical replay uses previously stored host events. Simulator and host data have distinct source IDs. No extra dependency is needed for simulated ingestion.
+
+## Business analytics (Phase 4)
+
+    .\.venv\Scripts\alembic.exe upgrade head
+    .\.venv\Scripts\python.exe scripts\phase4_demo.py
+
+Migration 0002 adds the analytics schema with six approved public views and a private UTC day-segmentation helper. Views require no semantic session settings. They expose curated measurements, default wall-clock freshness, weighted daily summaries, interval costs by currency, and regional snapshots. AnalyticsService applies explicit bound parameters for historical/current health, windows, coverage, optimization candidates, CPU pressure, and comparable costs.
+
+See [analytics definitions](docs/analytics_dictionary.md), [actual Phase 4 results and inspection commands](docs/phase4_demo.md), and [measured query plans](docs/analytics_query_plans.md). No additional index or materialized view was justified by the 9,000-observation benchmark. The schema domain tables and ETL rules are unchanged. Alembic check verifies domain model metadata; the explicit migration and integration tests verify view definitions/behavior.
+
+The demo preserves existing data and ingests only two small comparison windows under a separate source ID. Read-only-role tests prove approved view/service reads succeed while internal table reads fail. No production role credentials or HTTP endpoints are added in this phase.

@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     db_connect_timeout_seconds: int = Field(default=3, ge=1, le=30)
     db_statement_timeout_ms: int = Field(default=5000, ge=100, le=60000)
 
+    # These configure parameterized services; public view defaults are visible SQL constants.
+    analytics_freshness_seconds: int = Field(default=120, ge=1, le=86400)
+    analytics_max_window_days: int = Field(default=7, ge=1, le=7)
+    analytics_max_results: int = Field(default=100, ge=1, le=100)
+
     etl_batch_size: int = Field(default=500, ge=1, le=1000)
     etl_overlap_seconds: int = Field(default=60, ge=0, le=3600)
     etl_initial_lookback_seconds: int = Field(default=120, ge=1, le=86400)

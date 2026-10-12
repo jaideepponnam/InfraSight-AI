@@ -245,3 +245,9 @@ Schema and migration tests create a uniquely named infrasight_test_<UUID> databa
 The schema is unchanged at revision 0001. Phase 3 implements source-scoped session advisory locks, batched conflict-aware loading, raw-first validation, rejection attempt evidence, committed run counters, and atomic success/progress finalization. Before/after cursors describe committed progress; timestamp adapters restart their page cursor for each extraction window. Older replays preserve the forward watermark/cursor but become the latest successful audit attempt.
 
 Phase 3 validates provider consistency within an adapter and constructs source/run/server/raw relationships from trusted pipeline context. Historical inventory metadata is protected against older replay. Raw payloads are preserved verbatim as JSON-compatible source records; malformed observed_at does not affect simulator extraction membership. Missing required host percentages produce rejections. Full transaction and health semantics are in docs/etl_design.md; the recorded demo is in docs/phase3_demo.md.
+
+## Phase 4 analytics extension
+
+Database head 0002 adds an analytics schema without changing the seven domain tables introduced by 0001. Six public normal views expose approved business datasets; a private helper performs UTC interval allocation. No public view depends on custom session settings. Parameterized AnalyticsService queries implement runtime reference times, freshness thresholds, currencies, windows, pressure/optimization rules, and comparisons. Raw payloads, rejection details, and internal errors remain outside the public analytics contract.
+
+The exact business definitions, coverage/cost assumptions, per-view columns, and limitations are in docs/analytics_dictionary.md. Recorded database answers and inspection queries are in docs/phase4_demo.md. Existing indexes were measured; no new index was added.
