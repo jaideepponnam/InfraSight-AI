@@ -1073,3 +1073,125 @@ nav button[aria-current="page"] svg {color: #0f62fe;}
 .cds--btn--primary:hover:not(:disabled) {background: #0043ce;}
 .cds--btn--ghost {color: #0f62fe;}
 .cds--btn--ghost:hover {background: #edf5ff;}
+
+/* AI answer presentation only: render the supplied Markdown without rewriting it. */
+.answer-markdown {
+  max-width: 70ch;
+  text-align: left;
+  white-space: normal;
+  line-height: 1.8;
+}
+.answer-markdown > :first-child {margin-top: 0;}
+.answer-markdown > :last-child {margin-bottom: 0;}
+.answer-markdown p {margin: 0 0 1rem; white-space: pre-wrap;}
+.answer-markdown > p:first-child:not(.answer-fact) {font-size: 1.125rem; line-height: 1.65;}
+.answer-markdown :is(h1, h2, h3, h4, h5, h6) {
+  margin: 1.6rem 0 0.7rem;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: normal;
+}
+.answer-markdown :is(h1, h2) {font-size: 1.25rem;}
+.answer-markdown h3 {font-size: 1.125rem;}
+.answer-markdown :is(h4, h5, h6) {font-size: 1rem;}
+.answer-markdown strong {font-weight: 600;}
+.answer-markdown :is(ul, ol) {margin: 0.65rem 0 1.25rem; padding-left: 1.4rem;}
+.answer-markdown ul {list-style: disc;}
+.answer-markdown ol {list-style: decimal;}
+.answer-markdown li {padding: 0.25rem 0;}
+.answer-markdown li > p {margin: 0;}
+.answer-markdown .answer-fact {padding: 0.5rem 0; border-bottom: 1px solid var(--border);}
+.answer-markdown .answer-fact > strong:first-child {display: inline-block; min-width: 10rem; margin-right: 0.6rem;}
+.answer-markdown li > .answer-fact {padding: 0; border: 0;}
+.answer-markdown blockquote {border-left: 2px solid var(--border); margin: 1rem 0; padding-left: 1rem;}
+.answer-markdown a {text-decoration: underline; text-underline-offset: 0.2em;}
+.answer-markdown code {font-size: 0.9em;}
+.answer-markdown pre {margin: 1rem 0; white-space: pre-wrap;}
+.answer-table {overflow-x: auto; max-width: 100%; margin: 1rem 0 1.5rem;}
+.answer-table table {font-size: 0.875rem; white-space: normal;}
+.answer-table :is(th, td) {text-align: left; vertical-align: top; line-height: 1.6; padding: 0.65rem 0.75rem;}
+@media (max-width: 1400px) {
+  .answer-markdown .answer-fact > strong:first-child {min-width: 8rem;}
+}
+
+/* Mobile layout: preserve the desktop workspace and all backend data. */
+@media (max-width: 768px) {
+  .app-shell {display: block;}
+  .navigation {
+    position: static;
+    width: 100%;
+    padding: 16px 16px 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .brand {font-size: 19px;}
+  .brand small {font-size: 10px; margin-top: 4px;}
+  .nav-caption, .nav-footer {display: none;}
+  .navigation nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+    margin-top: 16px;
+  }
+  .navigation nav button {
+    min-height: 48px;
+    justify-content: center;
+    gap: 7px;
+    padding: 10px 4px;
+    font-size: 12px;
+    border-left: 0;
+    border-bottom: 2px solid transparent;
+  }
+  .navigation nav button[aria-current="page"] {border-bottom-color: var(--blue);}
+  .navigation nav button svg {flex-shrink: 0; width: 18px;}
+  main {margin-left: 0; width: 100%;}
+  .context-toolbar {
+    position: static;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 16px;
+  }
+  .context-toolbar .cds--form-item {width: 100%; min-width: 0;}
+  .context-toolbar .cds--select-input {min-height: 44px;}
+  .context-source {min-width: 0;}
+  .context-source b {white-space: normal; overflow-wrap: anywhere;}
+  .toolbar-status {margin-left: 0; justify-content: flex-start; flex-wrap: wrap;}
+  .connection {font-size: 11px;}
+  .context-toolbar > .cds--btn {justify-self: end; min-width: 44px; min-height: 44px;}
+  .workspace {padding: 24px 16px;}
+  .snapshot-note {align-items: flex-start; line-height: 1.6; margin-bottom: 24px;}
+  .page-heading h1 {font-size: 28px; line-height: 1.25;}
+  .kpi-grid {grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;}
+  .metric {padding: 18px 14px; min-width: 0;}
+  .metric:last-child {grid-column: 1/-1;}
+  .metric strong {font-size: 30px;}
+  .metric:last-child strong {font-size: 26px;}
+  .analytics-grid, .analyst-layout {grid-template-columns: minmax(0, 1fr); gap: 20px;}
+  .analytics-grid > *, .analyst-layout > *, .cds--tile {min-width: 0;}
+  .panel, .composer, .answer, .analysis-progress, .architecture, .latest-run {padding: 20px 16px;}
+  .panel-title {flex-wrap: wrap; align-items: flex-start;}
+  .panel-title h2 {line-height: 1.4;}
+  .feature-label {letter-spacing: 0.5px; line-height: 1.6;}
+  .feature-label svg {flex-shrink: 0;}
+  .composer h2 {font-size: 22px;}
+  .composer-actions {flex-direction: column; align-items: stretch; gap: 16px;}
+  .composer-actions small {max-width: none;}
+  .composer-actions .cds--btn {width: 100%; max-width: none;}
+  .suggestions {grid-template-columns: minmax(0, 1fr);}
+  .suggestion {min-height: 48px; padding: 16px;}
+  .suggestion span:not(.suggestion-index) {flex: 1; min-width: 0;}
+  .answer-markdown {font-size: 15px;}
+  .answer-markdown .answer-fact > strong:first-child {min-width: 0; margin-right: 0.35rem;}
+  .provenance dl > div {grid-template-columns: minmax(0, 1fr); gap: 4px;}
+  .provenance .cds--tag {max-width: 100%;}
+  .pipeline-path {flex-direction: column; align-items: stretch; gap: 0; margin: 20px 0;}
+  .pipeline-path > div {flex-basis: auto; padding: 14px 0; border-bottom: 1px solid var(--border);}
+  .pipeline-path > div:last-child {border-bottom: 0;}
+  .pipeline-path svg {transform: rotate(90deg);}
+  .run-counts {grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 16px;}
+  .latest-run > .support {overflow-wrap: anywhere;}
+  .table-scroll, .answer-table {max-width: 100%; overscroll-behavior-x: contain;}
+  .workspace-footer {line-height: 1.6;}
+  .cds--inline-notification__details {min-width: 0;}
+}

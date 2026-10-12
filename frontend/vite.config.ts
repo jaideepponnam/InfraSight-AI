@@ -27,6 +27,13 @@ export default defineConfig(({ mode, command }) => {
   };
   return {
     plugins: [react()],
+    // Carbon still uses legacy Sass if(); silence only that known deprecation.
+    // Keep other compiler warnings and errors visible.
+    css: {
+      preprocessorOptions: {
+        scss: { quietDeps: true, silenceDeprecations: ["if-function"] },
+      },
+    },
     // Only these two public values enter client code, never other VITE_* variables.
     envPrefix: [],
     define: {

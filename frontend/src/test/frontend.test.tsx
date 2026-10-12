@@ -169,7 +169,7 @@ describe("AI analyst", () => {
   it("renders answer, exact currency and collapsed evidence", async () => {
     const client = new APIClient();
     vi.spyOn(client, "ask").mockResolvedValue({
-      answer: "Infrastructure assessment.",
+      answer: "## Infrastructure assessment\n\n**Health:** STALE\n\n- Review freshness before acting.",
       request_id: "test",
       evidence: {
         tools_used: ["get_overview"],
@@ -187,7 +187,9 @@ describe("AI analyst", () => {
       "Overview",
     );
     await userEvent.click(screen.getByRole("button", { name: "Analyze" }));
-    await screen.findByText("Infrastructure assessment.");
+    await screen.findByRole("heading", { name: "Infrastructure assessment" });
+    expect(screen.getByText("Health:")).toBeInTheDocument();
+    expect(screen.getByText("Review freshness before acting.")).toBeInTheDocument();
     expect(screen.getByText("get_overview")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Evidence" })).toHaveAttribute(
       "aria-expanded",

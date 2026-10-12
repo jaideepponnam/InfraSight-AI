@@ -22,6 +22,7 @@ import {
   Information,
 } from "@carbon/icons-react";
 import { APIClient, APIError, live, snapshot } from "./api";
+import { AnalystAnswer } from "./AnalystAnswer";
 import { date, money, numeric, percent, telemetryState } from "./format";
 import type { AIResponse, Context, Overview, Region, Run } from "./types";
 
@@ -371,7 +372,7 @@ export function AIAnalyst({
                 </div>
                 <Tag type="cyan">{result.context.mode}</Tag>
               </div>
-              <div className="answer-text">{result.response.answer}</div>
+              <AnalystAnswer answer={result.response.answer} />
               {JSON.stringify(result.context) !== JSON.stringify(context) && (
                 <p className="note">
                   This answer belongs to an earlier context. Submit again to
