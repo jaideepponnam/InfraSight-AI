@@ -28,6 +28,12 @@ class Settings(BaseSettings):
 
     api_read_key: SecretStr | None = None
     api_admin_key: SecretStr | None = None
+    groq_api_key: SecretStr | None = None
+    groq_model: str = Field(default="llama-3.3-70b-versatile", min_length=1, max_length=128)
+    groq_timeout_seconds: float = Field(default=20, ge=1, le=60)
+    ai_request_timeout_seconds: float = Field(default=60, ge=1, le=120)
+    ai_max_result_rows: int = Field(default=20, ge=1, le=50)
+
     etl_api_max_window_seconds: int = Field(default=600, ge=90, le=3600)
 
     etl_batch_size: int = Field(default=500, ge=1, le=1000)

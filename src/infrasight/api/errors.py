@@ -6,6 +6,8 @@ from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException
 
+from infrasight.ai.provider import AIError
+
 
 def response(request, status, code, message, details=None):
     request_id = request.state.request_id
@@ -20,6 +22,19 @@ def response(request, status, code, message, details=None):
 
 
 def install_handlers(app):
+    @app.exception_handler(AIError)
+    async def ai_error(request: Request, exc):
+        structlog.get_logger(__name__).warning("ai_request_failed", error_code=exc.code)
+        result = response(
+            request,
+            exc.status,
+            exc.code,
+            "AI analytics could not complete; no answer was generated.",
+        )
+        if exc.status == 429:
+            result.headers["Retry-After"] = "30"
+        return result
+
     @app.exception_handler(HTTPException)
     async def http_error(request: Request, exc):
         code = (

@@ -117,3 +117,10 @@ Health/readiness and Swagger remain public. No queues, AI, or dashboard are incl
 
 See [the Phase 5 HTTP/Swagger demo](docs/phase5_demo.md) for startup, authorization,
 endpoint inspection, replay verification, and exact business metadata.
+
+## Phase 6 AI analyst
+
+`POST /api/v1/ai/query` uses Groq and ten fixed read-only analytics tools. Configure
+`GROQ_API_KEY` privately and select `GROQ_MODEL` through settings. Responses contain
+PostgreSQL-backed evidence, freshness, coverage and currency alongside the explanation.
+See [the Phase 6 demo](docs/phase6_demo.md). No AI execution tools or dashboard are included.
