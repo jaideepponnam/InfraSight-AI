@@ -2,11 +2,11 @@
 
 Cloud infrastructure intelligence platform: telemetry extraction → validated ETL → PostgreSQL analytics → controlled AI tools → operations dashboard.
 
-## Current milestone: Phase 1
+## Current milestone: Phase 2
 
 Implemented: installable Python 3.11 backend, validated environment settings, structured JSON logging, FastAPI health endpoints, pooled PostgreSQL sessions, and Alembic foundation.
 
-Domain tables, ETL, analytics, AI, and the dashboard are planned for later phases. No domain tables or migration revisions exist yet. No automatic Git commits are made.
+Phase 2 adds seven domain tables and Alembic revision 0001. ETL, analytics views, AI, and the dashboard remain future phases. No automatic Git commits are made.
 
 ## Local development (Windows PowerShell)
 
@@ -33,6 +33,7 @@ Prerequisites: Python 3.11 and Docker Desktop using Linux containers. Run comman
 
 5. Verify Alembic connectivity and start FastAPI from Windows/VS Code:
 
+    .\.venv\Scripts\alembic.exe upgrade head
     .\.venv\Scripts\alembic.exe current
     .\.venv\Scripts\uvicorn.exe infrasight.main:create_app --factory --reload --host 127.0.0.1 --port 8000 --no-access-log
 
@@ -56,7 +57,7 @@ Compose binds PostgreSQL to **127.0.0.1:55432:5432** for the Windows API process
 
 The persistent volume survives docker compose down. Do not use down -v unless intentionally deleting local database data.
 
-Authentication and production ingress are later milestones. Run this Phase 1 API on localhost.
+Authentication and production ingress are later milestones. Run the current API on localhost.
 
 ## Checks
 
@@ -71,12 +72,12 @@ Database tests skip unless TEST_DATABASE_URL is explicitly set. After configurin
     .\.venv\Scripts\alembic.exe current
     Remove-Item Env:TEST_DATABASE_URL
 
-Integration tests check real PostgreSQL connectivity, transaction cleanup, and readiness. They create no domain tables. Alembic current should report no revision at this stage. The first meaningful schema revision belongs to Phase 2.
+Integration tests check connectivity, transaction cleanup, readiness, schema constraints, deduplication, restricted deletes, and migration downgrade/re-upgrade. New schema tests automatically create and remove a uniquely named disposable database on the configured container; the local bootstrap account needs CREATEDB permission. They never downgrade the application database. Alembic current should report 0001 (head). Run alembic check to verify metadata consistency. See [the data dictionary](docs/data_dictionary.md) for all columns, constraints, indexes, and source_id conventions.
 
 ## Layout
 
 - src/infrasight/api: HTTP routes and health schemas.
-- src/infrasight/db: engine, session dependency, empty declarative metadata.
+- src/infrasight/db: engine, session dependency, and seven domain models.
 - src/infrasight/config.py: environment settings.
 - src/infrasight/logging.py: structured logging.
 - migrations: Alembic environment and revision template.

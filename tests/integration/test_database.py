@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from infrasight.config import Settings
+from infrasight.db import models  # noqa: F401
 from infrasight.db.base import Base
 from infrasight.db.session import create_database_engine, create_session_factory
 from infrasight.main import create_app
@@ -31,7 +32,7 @@ def test_database_connectivity_and_transaction_cleanup(database_settings):
             session.execute(text("SET LOCAL application_name = 'infrasight_rollback_test'"))
         with factory() as session:
             assert session.scalar(text("SHOW application_name")) != "infrasight_rollback_test"
-        assert not Base.metadata.tables
+        assert len(Base.metadata.tables) == 7
     finally:
         engine.dispose()
 
