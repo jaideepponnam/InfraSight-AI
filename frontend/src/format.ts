@@ -19,12 +19,18 @@ export function money(value: unknown, currency: string): string {
     ? currency + " " + n.toFixed(Math.max(4, Math.min(8, n.decimalPlaces())))
     : "Not available";
 }
+const cstTime = new Intl.DateTimeFormat("en-US", {
+  timeZone: "Etc/GMT+6",
+  month: "short", day: "2-digit", year: "numeric",
+  hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true,
+});
+
 export function date(value: string | null | undefined): string {
   if (!value) return "Not available";
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime())
     ? "Not available"
-    : parsed.toISOString().replace("T", " ").replace(".000Z", " UTC");
+    : cstTime.format(parsed) + " CST";
 }
 export function telemetryState(data: Overview): string {
   if (

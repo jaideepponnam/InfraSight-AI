@@ -20,6 +20,13 @@
 @font-face {
   font-family: "IBM Plex Sans";
   font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url("../node_modules/@ibm/plex-sans/fonts/complete/woff2/IBMPlexSans-Light.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
   font-weight: 400;
   font-display: swap;
   src: url("../node_modules/@ibm/plex-sans/fonts/complete/woff2/IBMPlexSans-Regular.woff2")
@@ -1195,3 +1202,136 @@ nav button[aria-current="page"] svg {color: #0f62fe;}
   .workspace-footer {line-height: 1.6;}
   .cds--inline-notification__details {min-width: 0;}
 }
+
+.database-sample {margin-bottom: 22px;}
+.database-sample .support {margin: 12px 0;}
+
+.demo-etl {padding: 24px; margin-bottom: 22px;}
+.demo-etl .panel-title .support {margin-top: 8px;}
+.demo-etl .support {overflow-wrap: anywhere;}
+.demo-etl .cds--inline-loading {margin-top: 16px;}
+@media (max-width: 768px) {
+  .demo-etl {padding: 20px 16px;}
+  .demo-etl .panel-title .cds--btn {width: 100%; max-width: none;}
+}
+
+/* Compact top navigation replaces the sidebar; content uses the full workspace. */
+.app-shell {display: block;}
+.app-shell > main {margin-left: 0; width: 100%;}
+.app-header {
+  display: flex; align-items: center; gap: 24px;
+  padding: 16px 32px; min-height: 84px;
+  position: sticky; top: 0; z-index: 20;
+  background: #ffffff; border-bottom: 1px solid var(--border);
+}
+.app-header .brand {flex-shrink: 0; font-size: 19px; gap: 10px;}
+.app-header .brand small {font-size: 9px; margin-top: 5px;}
+.app-header .brand-mark {width: 32px; height: 32px; color: var(--blue); border: 0; background: transparent;}
+.top-navigation {flex: 1; flex-direction: row; gap: 4px; align-items: center; margin-left: 16px;}
+.top-navigation button {
+  gap: 8px; padding: 12px 16px; min-height: 44px;
+  border-left: 0; border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+.top-navigation button[aria-current="page"] {border-bottom-color: var(--blue);}
+.header-context {display: flex; align-items: center; gap: 12px; flex-shrink: 0;}
+.header-context .cds--tag {margin: 0;}
+.header-datetime {display: flex; flex-direction: column; gap: 4px; font-variant-numeric: tabular-nums; white-space: nowrap;}
+.header-datetime span {font-size: 11px; color: #6f6f6f;}
+.header-datetime b {font-size: 13px; font-weight: 500; color: #161616;}
+.app-header .header-refresh {flex-shrink: 0; min-width: 44px; min-height: 44px;}
+@media (max-width: 1150px) {
+  .app-header {padding: 16px 24px; gap: 16px;}
+  .top-navigation {margin-left: 0;}
+  .top-navigation button {padding-left: 12px; padding-right: 12px;}
+}
+@media (max-width: 850px) {
+  .app-header {
+    position: static; display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "brand refresh" "nav nav" "context context";
+    padding: 16px; gap: 10px;
+  }
+  .app-header .brand {grid-area: brand;}
+  .app-header .header-refresh {grid-area: refresh; justify-self: end;}
+  .top-navigation {grid-area: nav; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; gap: 0;}
+  .top-navigation button {justify-content: center; padding: 12px 4px; font-size: 12px;}
+  .top-navigation svg {flex-shrink: 0;}
+  .header-context {grid-area: context; justify-content: center; padding-top: 6px;}
+  .header-datetime {flex-direction: row; align-items: baseline; gap: 10px;}
+}
+
+.scout-layout .composer form {margin-top: 0;}
+.scout-layout .composer-actions {justify-content: flex-end;}
+
+/* IBM reference palette: white canvas, Gray 10 surfaces, Blue 60 interactions. */
+:root {
+  --canvas: #ffffff; --shell: #ffffff; --surface: #f4f4f4;
+  --card: #f4f4f4; --elevated: #ffffff; --border: #e0e0e0;
+  --muted: #6f6f6f; --blue: #0f62fe;
+}
+.app-shell {background: var(--canvas); color: #161616;}
+.app-header {min-height: 56px; padding: 0 32px; gap: 16px; border-bottom-color: #e0e0e0;}
+.app-header .brand {font-size: 24px; font-weight: 500; letter-spacing: -0.6px; border-right: 1px solid #e0e0e0; padding-right: 24px; min-height: 32px;}
+.app-header .brand b {font-weight: 500; color: #161616;}
+.top-navigation {gap: 0; margin-left: 0;}
+.top-navigation button {min-height: 56px; padding: 0 20px; font-size: 14px; color: #161616; font-weight: 400;}
+.top-navigation button:hover {background: #f4f4f4;}
+.top-navigation button[aria-current="page"] {background: #f4f4f4; color: #0f62fe; border-bottom-color: #0f62fe;}
+.header-datetime span {color: #525252;}
+.header-datetime b {font-weight: 400;}
+.page-heading h1 {font-size: 36px; line-height: 1.25; font-weight: 300; color: #161616; letter-spacing: -0.4px;}
+.panel-title h2 {font-weight: 400; color: #161616;}
+.page-heading p, .support {color: #525252;}
+.cds--tile {background: #f4f4f4; border-color: #e0e0e0; box-shadow: none;}
+.metric, .answer {background: #ffffff;}
+.metric strong {font-weight: 300;}
+.composer {background: #f4f4f4; border-top: 2px solid #0f62fe;}
+.cds--text-area {background: #ffffff; color: #161616; border-bottom-color: #8d8d8d;}
+.suggestion {background: #ffffff; color: #161616; border-color: #e0e0e0;}
+.suggestion:hover {background: #f4f4f4; border-color: #0f62fe;}
+.suggestion svg, .pipeline-path span, .pipeline-path svg {color: #0f62fe;}
+.note, pre, th {background: #f4f4f4; color: #525252;}
+.cds--btn--primary {background: #0f62fe; color: #ffffff;}
+.cds--btn--primary:hover:not(:disabled) {background: #0043ce;}
+.cds--btn--ghost:hover {background: #f4f4f4;}
+.cds--btn--tertiary {color: #0f62fe; border-color: #0f62fe;}
+.cds--btn--tertiary:hover:not(:disabled) {background: #0f62fe; color: #ffffff;}
+.track {background: #e0e0e0;}
+.resource .track span {background: #0f62fe;}
+.resource:nth-child(2) .track span {background: #4589ff;}
+.resource:nth-child(3) .track span {background: #8d8d8d;}
+@media (max-width: 1150px) {
+  .app-header {padding: 0 24px; gap: 12px;}
+  .top-navigation button {padding-left: 16px; padding-right: 16px;}
+}
+@media (max-width: 850px) {
+  .app-header {padding: 12px 16px; gap: 8px;}
+  .app-header .brand {border-right: 0; padding-right: 0; font-size: 23px;}
+  .top-navigation button {min-height: 44px; padding: 8px 4px; font-size: 14px;}
+  .page-heading h1 {font-size: 30px;}
+}
+
+.health-controls {display: flex; align-items: center; gap: 10px;}
+.health-controls .cds--form-item {flex: none; width: 90px;}
+.health-controls .cds--select-input {background: #ffffff; min-height: 36px;}
+
+/* Keep the health selector and freshness badge independently sized. */
+.health-controls {flex: 0 0 auto; flex-wrap: wrap; gap: 8px; min-width: 0;}
+.health-controls .cds--form-item {flex: 0 0 96px; width: 96px; min-width: 0;}
+.health-controls .cds--select {width: 96px; min-width: 0;}
+.health-controls .cds--select-input__wrapper {width: 100%; min-width: 0;}
+.health-controls .cds--select-input {width: 100%; min-width: 0; padding-right: 36px;}
+.health-controls > .cds--tag {flex: 0 0 auto; margin: 0; white-space: nowrap;}
+.health-controls .cds--select__arrow {right: 12px;}
+@media (max-width: 1000px) {
+  .panel-title:has(.health-controls) {flex-wrap: wrap; row-gap: 12px;}
+}
+
+/* Compact operational controls, with enough room for the select arrow. */
+.health-controls {gap: 6px;}
+.health-controls .cds--form-item {flex-basis: 80px; width: 80px;}
+.health-controls .cds--select {width: 80px;}
+.health-controls .cds--select-input {height: 32px; min-height: 32px; font-size: 12px; padding-left: 10px; padding-right: 28px;}
+.health-controls .cds--select__arrow {right: 8px;}
+.health-controls > .cds--tag, .panel-title .cds--tag--sm {font-size: 11px;}

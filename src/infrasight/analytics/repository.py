@@ -244,6 +244,35 @@ FROM stats
 )
 
 
+AVERAGE_HEALTH_SQL = (
+    "WITH "
+    + HEALTH_CTES
+    + ","
+    + WINDOW_CTES
+    + """
+SELECT CASE WHEN GROUPING(m.source_id, m.region_code)=3 THEN 'fleet' ELSE 'region' END
+           AS scope_kind,
+       m.source_id, m.region_code, COUNT(*) AS observation_count,
+       COALESCE(BOOL_OR(s.overlap_detected), false) AS health_overlap_detected,
+       CASE WHEN BOOL_OR(s.overlap_detected) THEN NULL ELSE
+         COALESCE(SUM(m.covered_seconds) FILTER (WHERE m.resource_health='HEALTHY'),0)
+           / NULLIF(SUM(m.covered_seconds),0) END AS healthy_fraction,
+       CASE WHEN BOOL_OR(s.overlap_detected) THEN NULL ELSE
+         COALESCE(SUM(m.covered_seconds) FILTER (WHERE m.resource_health='WARNING'),0)
+           / NULLIF(SUM(m.covered_seconds),0) END AS warning_fraction,
+       CASE WHEN BOOL_OR(s.overlap_detected) THEN NULL ELSE
+         COALESCE(SUM(m.covered_seconds) FILTER (WHERE m.resource_health='CRITICAL'),0)
+           / NULLIF(SUM(m.covered_seconds),0) END AS critical_fraction,
+       COALESCE((SELECT SUM(coverage_seconds) FROM stats),0)
+         / NULLIF((SELECT COUNT(*) FROM inventory) * EXTRACT(EPOCH FROM
+             CAST(:end AS timestamptz)-CAST(:start AS timestamptz)),0) AS coverage_fraction
+FROM measures m JOIN stats s ON s.server_id=m.server_id
+GROUP BY GROUPING SETS ((), (m.source_id, m.region_code))
+ORDER BY scope_kind, m.source_id, m.region_code
+"""
+)
+
+
 class AnalyticsRepository:
     def __init__(self, connection):
         self.connection = connection
@@ -265,6 +294,9 @@ class AnalyticsRepository:
             }
             for row in rows
         ]
+
+    def average_health(self, query):
+        return self.rows(AVERAGE_HEALTH_SQL, query)
 
     def health(self, query):
         return self.rows(HEALTH_SQL, query)

@@ -153,3 +153,16 @@ def pressure(
     return report_response(
         request, service.sustained_cpu_pressure(params.query(Pressure, lookback=24))
     )
+
+
+@router.get(
+    "/average-health",
+    summary="Duration-weighted recorded health mix in a bounded window",
+    **options,
+)
+def average_health(
+    request: Request,
+    params: Annotated[WindowParameters, Query()],
+    service: Annotated[AnalyticsService, Depends(analytics)],
+):
+    return report_response(request, service.average_health(params.query(Window)))

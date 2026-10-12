@@ -1,5 +1,7 @@
 import type {
   AIResponse,
+  AverageHealth,
+  DemoETLResult,
   Context,
   Envelope,
   Overview,
@@ -51,6 +53,16 @@ export function live(): Context {
     min_samples: 20,
   };
 }
+export function contextForRun(run: Run | null): Context {
+  const scope = live();
+  if (!run) return scope;
+  const end = Date.parse(run.requested_window_end || "");
+  if (run.status !== "SUCCEEDED" || run.source_id !== scope.source_id || !Number.isFinite(end))
+    throw new APIError(502);
+  return { ...scope, reference_time: new Date(end).toISOString(),
+    start: new Date(end - 3600000).toISOString(), end: new Date(end).toISOString() };
+}
+
 export function query(context: Context) {
   return new URLSearchParams({
     source_id: context.source_id,
@@ -91,7 +103,7 @@ export class APIClient {
       import.meta.env.PROD,
     ),
   ) {}
-  async request<T>(path: string, body?: unknown): Promise<T> {
+  async request<T>(path: string, body?: unknown, shape: "ai" | "envelope" = body ? "ai" : "envelope"): Promise<T> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), body ? 70000 : 15000);
     try {
@@ -115,7 +127,7 @@ export class APIClient {
       if (
         !data ||
         typeof data !== "object" ||
-        (body
+        (shape === "ai"
           ? !("answer" in data && "evidence" in data)
           : !("data" in data && "meta" in data))
       )
@@ -132,6 +144,9 @@ export class APIClient {
       clearTimeout(timer);
     }
   }
+  averageHealth(context: Context) {
+    return this.request<Envelope<AverageHealth[]>>("analytics/average-health?" + query(context));
+  }
   overview(context: Context) {
     return this.request<Envelope<Overview>>(
       "analytics/overview?" + query(context),
@@ -142,11 +157,18 @@ export class APIClient {
       "analytics/regions?" + query(context),
     );
   }
+  async latestSuccessfulRun(sourceId: string): Promise<Run | null> {
+    const response = await this.request<Envelope<Run[]>>("etl/runs?" + new URLSearchParams({ source_id: sourceId, status: "SUCCEEDED", limit: "1" }));
+    return response.data[0] || null;
+  }
   runs(context: Context) {
     return this.request<Envelope<Run[]>>(
       "etl/runs?" +
         new URLSearchParams({ source_id: context.source_id, limit: "8" }),
     );
+  }
+  demoETL() {
+    return this.request<Envelope<DemoETLResult>>("demo/etl/run", {}, "envelope");
   }
   ask(question: string, context: Context) {
     return this.request<AIResponse>("ai/query", aiBody(question, context));

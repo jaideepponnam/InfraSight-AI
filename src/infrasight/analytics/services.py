@@ -71,6 +71,14 @@ class AnalyticsService:
             warnings=notices,
         )
 
+    def average_health(self, query):
+        report = self._report(query, "average_health")
+        if any(row.get("health_overlap_detected") for row in report.rows):
+            report.warnings.append(
+                "Average health unavailable where observation intervals overlap."
+            )
+        return report
+
     def health(self, query):
         return self._report(query, "health")
 

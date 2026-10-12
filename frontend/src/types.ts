@@ -57,6 +57,8 @@ export interface Region
   period_cost: Record<string, unknown>;
 }
 export interface Run {
+  requested_window_start?: string;
+  requested_window_end?: string;
   run_id: string;
   source_id: string;
   status: string;
@@ -111,4 +113,28 @@ export interface AIResponse {
     currency: string;
     tool_results: ToolEvidence[];
   };
+}
+
+export interface DemoETLResult {
+  run_id: string;
+  source_id: string;
+  status: "SUCCEEDED" | "FAILED";
+  window_start: string;
+  window_end: string;
+  watermark_before: string | null;
+  watermark_after: string | null;
+  counts: { extracted: number; accepted: number; inserted: number; duplicated: number; rejected: number };
+  error_code: string | null;
+}
+
+export interface AverageHealth {
+  scope_kind: "fleet" | "region";
+  source_id: string | null;
+  region_code: string | null;
+  observation_count: number;
+  healthy_fraction: Numeric;
+  warning_fraction: Numeric;
+  critical_fraction: Numeric;
+  coverage_fraction: Numeric;
+  health_overlap_detected: boolean;
 }

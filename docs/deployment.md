@@ -102,7 +102,7 @@ Frontend build-time environment:
 | VITE_API_BASE_URL | https://api.jaideepponnam.com |
 | VITE_API_READ_KEY | Exactly the dedicated backend API_READ_KEY value |
 
-**VITE_* values are browser-visible by design.** VITE_API_READ_KEY is a low-privilege public/demo credential, not a confidential secret. Only the two named values are allowed into client code by Vite configuration. Never configure DATABASE_URL, API_ADMIN_KEY, GROQ_API_KEY, or variants of those keys on the static site. The read key accesses the existing read/demo-safe endpoints, including controlled AI analytics; ETL mutation still requires the separate admin key. CORS is not authentication and does not prevent non-browser callers from using a public read key. Keep Groq spending/usage limits conservative and rotate the demo read key in both services together if necessary.
+**VITE_* values are browser-visible by design.** VITE_API_READ_KEY is a low-privilege public/demo credential, not a confidential secret. Only the two named values are allowed into client code by Vite configuration. Never configure DATABASE_URL, API_ADMIN_KEY, GROQ_API_KEY, or variants of those keys on the static site. The read key accesses the existing read/demo-safe endpoints, including controlled AI analytics; General ETL mutation still requires the separate admin key. The read key also permits the narrow /api/v1/demo/etl/run action, limited to simulated-cloud and a server-selected current window of at most 120 seconds with no client parameters. CORS is not authentication and does not prevent non-browser callers from using a public read key. Keep Groq spending/usage limits conservative and rotate the demo read key in both services together if necessary.
 
 Production browser requests go directly to the configured HTTPS API origin with X-API-Key. Build validation rejects absent configuration, embedded URL credentials, paths, and insecure remote origins. Changing either Vite value requires a frontend rebuild. Local npm run dev retains the same-origin Vite proxy and existing localhost setup. Do not use Vite's development server as public hosting.
 
@@ -125,7 +125,7 @@ Cloudflare handles apex CNAME flattening. Replace conflicting A/AAAA/CNAME recor
 - Test an analytics GET with the dedicated read key and the historical source/reference/window; missing key must remain 401.
 - Confirm the browser OPTIONS preflight from https://jaideepponnam.com permits X-API-Key/Content-Type and returns that exact allow-origin. Other origins must not receive permission.
 - Open https://jaideepponnam.com and inspect all three views. Keep SNAPSHOT visible; verify reporting counts, observation-time coverage, cost currency and ETL audit runs from actual data.
-- Do not trigger ETL or submit AI during deployment verification. Existing automated tests fake the provider and prove public-read credentials cannot trigger ETL.
+- Do not trigger ETL or submit AI during deployment verification. Existing automated tests fake the provider and prove public-read credentials cannot trigger general admin ETL; the narrow demo endpoint is verified with mocks.
 - Confirm admin/database/provider credentials are absent from the frontend environment/build. Check browser network requests use api.jaideepponnam.com, not a local proxy.
 - Before the interview, warm the free backend by opening /health/ready; a Render Free cold start can take about a minute, longer than the frontend's normal read timeout. Then refresh the app. [Render cold-start behavior](https://render.com/docs/free).
 

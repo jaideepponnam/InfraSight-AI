@@ -402,3 +402,97 @@ def test_gpt_oss_120b_groq_tool_round_trip(settings, context, service):
     assert response.evidence.tool_results[0].result["rows"][0]["observed_cost"] == "1.03775797"
     assert "synthetic-private-reasoning" not in response.model_dump_json()
     assert "synthetic-private-reasoning" not in json.dumps(captured)
+
+
+@pytest.mark.parametrize(
+    "status,body,category,code,api_status",
+    [
+        (
+            400,
+            {"error": {"code": "tool_use_failed", "type": "invalid_request_error"}},
+            "tool_generation_rejected",
+            "AI_PROVIDER_ERROR",
+            502,
+        ),
+        (
+            400,
+            {"error": {"type": "invalid_request_error"}},
+            "invalid_request",
+            "AI_PROVIDER_ERROR",
+            502,
+        ),
+        (
+            400,
+            {"error": {"code": "context_length_exceeded"}},
+            "context_limit",
+            "AI_PROVIDER_ERROR",
+            502,
+        ),
+        (
+            404,
+            {"error": {"code": "model_not_found"}},
+            "model_unavailable",
+            "AI_PROVIDER_ERROR",
+            502,
+        ),
+        (429, {"error": {"code": "rate_limit_exceeded"}}, "rate_limit", "AI_RATE_LIMITED", 429),
+        (401, {"error": {"code": "private-category"}}, "unknown", "AI_PROVIDER_CONFIGURATION", 503),
+        (503, {"error": {"code": "private-category"}}, "unknown", "AI_PROVIDER_UNAVAILABLE", 503),
+        (400, {"error": {"code": ["invalid_request_error"]}}, "unknown", "AI_PROVIDER_ERROR", 502),
+        (400, ["private-response"], "unknown", "AI_PROVIDER_ERROR", 502),
+        (400, "not-json-private-response", "malformed_error_body", "AI_PROVIDER_ERROR", 502),
+        (400, "x" * 100001, "oversized_error_body", "AI_PROVIDER_ERROR", 502),
+    ],
+    ids=[
+        "tool-rejection",
+        "invalid-request",
+        "context-limit",
+        "missing-model",
+        "rate-limit",
+        "auth-error",
+        "server-error",
+        "invalid-code-shape",
+        "invalid-body-shape",
+        "non-json",
+        "oversized",
+    ],
+)
+def test_provider_rejection_diagnostics(settings, status, body, category, code, api_status):
+    import structlog
+    from structlog.testing import capture_logs
+
+    settings.groq_api_key = SecretStr("private-diagnostic-key")
+    if isinstance(body, dict):
+        body["error"].update(
+            message="private-provider-message",
+            failed_generation="private-tool-arguments-and-reasoning",
+        )
+
+    def respond(request):
+        if isinstance(body, str):
+            return httpx.Response(status, text=body)
+        return httpx.Response(status, json=body)
+
+    tokens = structlog.contextvars.bind_contextvars(request_id="diagnostic-request")
+    try:
+        with capture_logs() as events, pytest.raises(AIError) as raised:
+            asyncio.run(
+                GroqProvider(settings, httpx.MockTransport(respond)).complete(
+                    [{"role": "user", "content": "private-question"}], [], "none"
+                )
+            )
+    finally:
+        structlog.contextvars.reset_contextvars(**tokens)
+    assert raised.value.code == code
+    assert raised.value.status == api_status
+    assert events == [
+        {
+            "event": "ai_provider_rejected",
+            "log_level": "warning",
+            "upstream_status": status,
+            "provider_error_category": category,
+            "request_id": "diagnostic-request",
+        }
+    ]
+    assert "private" not in json.dumps(events)
+    assert "private" not in str(raised.value)

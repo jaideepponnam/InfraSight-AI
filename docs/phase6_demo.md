@@ -89,3 +89,15 @@ by the existing response parser and are not returned as answers or evidence. See
 [Groq tool support](https://console.groq.com/docs/tool-use/overview). Explicit GROQ_MODEL
 environment overrides must also use the new model; changing a default does not replace
 a configured override. GROQ_MODEL and GROQ_API_KEY remain backend-only.
+
+
+### Diagnosing provider rejections
+
+For a failed AI request, use the response `request_id` to find the matching
+`ai_provider_rejected` event in backend logs. It records `upstream_status` and
+`provider_error_category` only. Categories distinguish known tool-generation,
+invalid-request, context-limit, and model-availability errors; unknown, malformed,
+or oversized bodies remain safely categorized without their contents.
+Provider text, prompts, failed tool arguments, and credentials are never logged.
+The public API error contract is unchanged. These diagnostics identify a rejection;
+they do not retry requests or repair tool generation automatically.

@@ -10,10 +10,12 @@ import {
   RATE_LIMIT_MESSAGE,
   resolveAPIBase,
   snapshot,
+  live,
+  contextForRun,
 } from "../api";
 import { AIAnalyst, SUGGESTIONS } from "../App";
-import { money, percent, telemetryState } from "../format";
-import type { Overview } from "../types";
+import { date, money, percent, telemetryState } from "../format";
+import type { Overview, Run } from "../types";
 afterEach(() => vi.unstubAllGlobals());
 describe("HTTP client", () => {
   it("uses configured production API origin and preserves the local proxy", () => {
@@ -102,6 +104,31 @@ describe("HTTP client", () => {
   });
 });
 describe("presentation integrity", () => {
+  it("pins the displayed assessment to the completed run instead of the wall clock", () => {
+    const run = { status: "SUCCEEDED", source_id: "simulated-cloud", requested_window_end: "2026-10-12T09:00:00Z" } as Run;
+    const selected = contextForRun(run);
+    expect(selected.reference_time).toBe("2026-10-12T09:00:00.000Z");
+    expect(selected.end).toBe(selected.reference_time);
+    expect(selected.start).toBe("2026-10-12T08:00:00.000Z");
+    expect(selected.freshness_seconds).toBe(120);
+    expect(contextForRun(run).reference_time).toBe(selected.reference_time);
+    expect(contextForRun({ ...run, requested_window_end: "2026-10-12T09:02:00Z" }).reference_time).toBe("2026-10-12T09:02:00.000Z");
+    expect(() => contextForRun({...run, status:"RUNNING"})).toThrow();
+  });
+  it("sends current Live context and keeps Snapshot historical", () => {
+    const now = Date.now();
+    const scope = live();
+    expect(Math.abs(Date.parse(scope.reference_time) - now)).toBeLessThan(1000);
+    expect(aiBody("Fleet health", scope).reference_time).toBe(scope.reference_time);
+    expect(snapshot().reference_time).toBe("2026-10-11T19:33:00Z");
+  });
+  it("uses fixed CST for presentation without changing UTC request inputs", () => {
+    expect(date("2026-10-11T19:33:00Z")).toBe("Oct 11, 2026, 1:33:00 PM CST");
+    expect(date("2026-01-11T19:33:00Z")).toBe("Jan 11, 2026, 1:33:00 PM CST");
+    expect(date(null)).toBe("Not available");
+    expect(date("invalid")).toBe("Not available");
+    expect(snapshot().reference_time).toBe("2026-10-11T19:33:00Z");
+  });
   it("retains exact decimal money without binary floating point", () =>
     expect(money("12345678901234567890.12345678", "USD")).toBe(
       "USD 12345678901234567890.12345678",
@@ -146,17 +173,23 @@ describe("AI analyst", () => {
         name: new RegExp(SUGGESTIONS[1].replace("?", "\?")),
       }),
     );
-    expect(screen.getByLabelText("Your investigation")).toHaveValue(
+    expect(screen.getByLabelText("Ask Scout")).toHaveValue(
       SUGGESTIONS[1],
     );
     expect(ask).not.toHaveBeenCalled();
+    expect(screen.getByRole("heading", { name: "Scout" })).toBeInTheDocument();
+    expect(screen.getByText("Ask away. Find the insight.")).toBeInTheDocument();
+    expect(screen.queryByText("ANALYSIS CONTEXT")).not.toBeInTheDocument();
+    expect(screen.queryByText("APPROVED ANALYTICS TOOLS")).not.toBeInTheDocument();
+    expect(screen.queryByText("Read-only")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Source, selected window/)).not.toBeInTheDocument();
   });
   it("shows calm 429 notification after explicit action only", async () => {
     const client = new APIClient();
     const ask = vi.spyOn(client, "ask").mockRejectedValue(new APIError(429));
     mount(client);
     await userEvent.type(
-      screen.getByLabelText("Your investigation"),
+      screen.getByLabelText("Ask Scout"),
       "Fleet health",
     );
     await userEvent.click(screen.getByRole("button", { name: "Analyze" }));
@@ -183,7 +216,7 @@ describe("AI analyst", () => {
     });
     mount(client);
     await userEvent.type(
-      screen.getByLabelText("Your investigation"),
+      screen.getByLabelText("Ask Scout"),
       "Overview",
     );
     await userEvent.click(screen.getByRole("button", { name: "Analyze" }));
@@ -196,4 +229,16 @@ describe("AI analyst", () => {
       "false",
     );
   });
+});
+
+
+it("does not allow an AI request before the latest-run context finishes loading", async () => {
+  const client = new APIClient();
+  const ask = vi.spyOn(client, "ask");
+  render(<AIAnalyst client={client} context={snapshot()} state="NOT ASSESSED" contextLoading />);
+  expect(screen.getByLabelText("Ask Scout")).toBeDisabled();
+  const submit = screen.getByRole("button", { name: "Analyze" });
+  expect(submit).toBeDisabled();
+  await userEvent.click(submit);
+  expect(ask).not.toHaveBeenCalled();
 });

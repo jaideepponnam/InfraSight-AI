@@ -1,52 +1,83 @@
-# InfraSight AI — interview frontend
+# InfraSight AI interview frontend
 
-React + TypeScript + Vite with IBM Carbon components. Three views: Overview, AI Analyst, Pipeline. Streamlit remains an independent fallback; backend behavior is unchanged.
+React, TypeScript, Vite and IBM Carbon. Three views: Overview, Scout, Pipeline.
+The Streamlit dashboard remains an independent fallback.
 
 ## Run locally
 
-From the repository root (PostgreSQL is already configured on localhost:55432):
+From the repository root, with project PostgreSQL on localhost:55432:
 
 ```powershell
-.\.venv\Scripts\python.exe -m uvicorn infrasight.main:create_app --factory --host 127.0.0.1 --port 8000
+.\.venv\Scripts\python.exe -m uvicorn infrasight.main:create_app --factory --host 127.0.0.1 --port 8001 --reload
 ```
 
-The existing backend environment must configure API_READ_KEY. Do not print or commit it.
-
-In another terminal:
+Keep backend credentials in the ignored backend environment file. In another terminal:
 
 ```powershell
 cd frontend
-npm.cmd install
-Copy-Item .env.example .env.local
-# Edit .env.local privately: VITE_API_READ_KEY must match backend API_READ_KEY.
+npm.cmd ci
+if (-not (Test-Path .env.local)) { Copy-Item .env.example .env.local }
+# Set VITE_API_BASE_URL=http://127.0.0.1:8001 privately in .env.local.
+# Set VITE_API_READ_KEY to match the backend demo read key; do not print it.
 npm.cmd run dev
 ```
 
-Open http://127.0.0.1:5173. If ports are occupied, leave existing services untouched: use API port 8001, set VITE_API_BASE_URL=http://127.0.0.1:8001 privately, and run npm.cmd run dev -- --port 5174 (http://127.0.0.1:5174). Default SNAPSHOT scope: simulated-cloud, 2026-10-11 19:30–19:33 UTC, reference 19:33, freshness 120 seconds, assessment minimum 4 samples. LIVE uses the previous hour and a 20-sample minimum; it does not imply telemetry is fresh. Refresh explicitly retrieves current data. Suggestions populate the question only; Analyze explicitly calls AI.
+Open http://127.0.0.1:5173. Keep existing unrelated services untouched; if this
+frontend port is occupied, run npm.cmd run dev -- --port 5174 instead.
+
+## Assessment and presentation
+
+The Live assessment uses the most recently requested successful simulated-cloud
+ETL run's window end as its reference. It remains stable until a newer successful
+run is loaded via navigation, Refresh, or completion of Run Demo ETL. Running and
+failed runs do not replace it. The analysis window is the hour preceding that
+reference, with a 20-sample minimum for relevant AI tools. Freshness is evaluated
+at that reference using the existing 120-second threshold. With no successful
+run, current time is used and missing/stale telemetry is shown honestly.
+
+The health dropdown has exactly Live and Avg. Live shows server health counts;
+Avg shows duration-weighted recorded health percentages for the selected hour.
+Missing time is excluded and coverage is disclosed; overlapping intervals make
+Avg unavailable. Timestamp display is fixed CST (UTC-6), while API parameters
+and database timestamps remain UTC. No scheduler or automatic AI submission runs.
+
+Scout suggestions populate the question only. Analyze explicitly submits it.
+Answers retain their original reference and evidence. The Pipeline database sample
+is fictional, collapsed by default, and never loads real database contents.
 
 ## Data and security
 
-Development browser requests use same-origin /api/v1 paths through Vite’s proxy to VITE_API_BASE_URL (default http://127.0.0.1:8000). Production builds and Vite preview call the configured API origin directly. FastAPI permits explicit configured origins and retains localhost development support. Render static hosting needs no Vite proxy; see [the deployment runbook](../docs/deployment.md).
+Development uses Vite's same-origin /api/v1 proxy to VITE_API_BASE_URL.
+Production uses the configured HTTPS API origin directly. See the
+[deployment runbook](../docs/deployment.md).
 
-VITE_* configuration is browser-visible by design. VITE_API_READ_KEY is a public/demo credential, not a confidential secret. Match the dedicated backend read key; never configure admin, database or provider secrets on the static site. The application’s ETL endpoints retain separate admin authorization.
+VITE_* values are browser-visible. VITE_API_READ_KEY is an intentional public/demo
+credential. Never include admin, database or provider secrets in frontend settings.
+General POST /api/v1/etl/run still requires both read and admin keys. The separate
+POST /api/v1/demo/etl/run accepts the read key only for simulated-cloud and a
+server-selected current window of at most 120 seconds. It rejects client parameters
+and cannot ingest host metrics. No replay or unrestricted mutation controls exist.
 
-Money is parsed with decimal.js and never converted to Number. Number conversion is used only for utilization bar geometry. Coverage and freshness use backend values; reporting counts and observation-time percentages are distinct. The two compact visualizations use accessible CSS bars, avoiding an extra chart stack.
+Money remains exact strings/Decimal values; Number conversion is used only for
+chart geometry. Coverage percentages and server reporting counts are distinct.
 
 Consumed endpoints:
 
 - GET /api/v1/analytics/overview
 - GET /api/v1/analytics/regions
-- GET /api/v1/etl/runs (latest 8)
-- POST /api/v1/ai/query (explicit submission only)
+- GET /api/v1/analytics/average-health (only when Avg is selected)
+- GET /api/v1/etl/runs (latest history and successful-run reference)
+- POST /api/v1/demo/etl/run (explicit button click)
+- POST /api/v1/ai/query (explicit Analyze action)
 
 ## Verification
 
 ```powershell
-npm.cmd run typecheck
 npm.cmd test
+npm.cmd run typecheck
 npm.cmd run build
 ```
 
-Tests fake fetch/provider responses. No real AI calls or ETL writes are needed. Deferred: automatic refresh, conversation persistence, inventory editing and extended dashboards.
-
-Design references: [Carbon React](https://www.carbondesignsystem.com/getting-started/developing/carbon-core/react), [Vite proxy](https://vite.dev/config/server-options#server-proxy). InfraSight AI is an independent project and uses no IBM branding.
+Tests mock fetch and AI responses. Browser verification must not trigger real AI
+or production ETL. No frontend authentication framework or additional infrastructure
+is introduced. InfraSight AI is independent and uses no IBM logos or affiliation.

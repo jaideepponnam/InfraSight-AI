@@ -1,7 +1,10 @@
+from datetime import UTC, datetime, timedelta
+
 from fastapi import HTTPException
 from sqlalchemy import text
 
 from infrasight.analytics.repository import FILTER, HEALTH_CTES, AnalyticsRepository
+from infrasight.api.schemas import TriggerRequest
 from infrasight.ingestion.cli import simulator
 from infrasight.ingestion.errors import SourceBusyError
 from infrasight.ingestion.pipeline import ETLPipeline
@@ -126,6 +129,19 @@ class OperationsService:
         if row is None:
             raise HTTPException(404, "ETL_RUN_NOT_FOUND")
         return {"data": dict(row)}
+
+    def demo_trigger(self):
+        # No client-selected source, settings, cursor, or window reaches this path.
+        maximum = min(
+            120, self.settings.etl_max_window_seconds, self.settings.etl_api_max_window_seconds
+        )
+        interval = self.settings.telemetry_interval_seconds
+        if interval > maximum:
+            raise HTTPException(503, "ETL_CONFIGURATION_INVALID")
+        source = simulator(self.settings, "simulated-cloud")
+        end = source.completed_until(datetime.now(UTC))
+        start = end - timedelta(seconds=(maximum // interval) * interval)
+        return self.trigger(TriggerRequest(source="simulator", start=start, end=end))
 
     def trigger(self, body):
         maximum = min(

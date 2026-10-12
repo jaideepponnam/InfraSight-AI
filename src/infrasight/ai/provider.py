@@ -1,7 +1,34 @@
 from typing import Literal, Protocol
 
 import httpx
+import structlog
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+_ERROR_CATEGORIES = {
+    "tool_use_failed": "tool_generation_rejected",
+    "invalid_request_error": "invalid_request",
+    "context_length_exceeded": "context_limit",
+    "model_not_found": "model_unavailable",
+    "rate_limit_exceeded": "rate_limit",
+}
+
+
+def _error_category(response: httpx.Response) -> str:
+    """Return static labels only; never retain messages or failed_generation."""
+    if len(response.content) > 100000:
+        return "oversized_error_body"
+    try:
+        body = response.json()
+    except ValueError:
+        return "malformed_error_body"
+    error = body.get("error") if isinstance(body, dict) else None
+    if not isinstance(error, dict):
+        return "unknown"
+    for field in ("code", "type"):
+        value = error.get(field)
+        if isinstance(value, str) and value in _ERROR_CATEGORIES:
+            return _ERROR_CATEGORIES[value]
+    return "unknown"
 
 
 class AIError(Exception):
@@ -65,6 +92,13 @@ class GroqProvider:
                         "Authorization": "Bearer " + self.settings.groq_api_key.get_secret_value()
                     },
                     json=payload,
+                )
+            if response.status_code != 200:
+                structlog.get_logger(__name__).warning(
+                    "ai_provider_rejected",
+                    upstream_status=response.status_code,
+                    provider_error_category=_error_category(response),
+                    request_id=structlog.contextvars.get_contextvars().get("request_id"),
                 )
             if response.status_code == 429:
                 raise AIError("AI_RATE_LIMITED", 429)
