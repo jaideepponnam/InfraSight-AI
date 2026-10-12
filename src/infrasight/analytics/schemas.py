@@ -7,8 +7,16 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validato
 
 class Scope(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
-    as_of: AwareDatetime = Field(default_factory=lambda: datetime.now(UTC))
-    freshness_seconds: int = Field(default=120, ge=1, le=86400)
+    as_of: AwareDatetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        description="UTC reference time; only completed observations are eligible.",
+    )
+    freshness_seconds: int = Field(
+        default=120,
+        ge=1,
+        le=86400,
+        description="Maximum completed-observation age in seconds before STALE.",
+    )
     source_id: str | None = Field(default=None, min_length=1, max_length=256)
     region_code: str | None = Field(default=None, min_length=1, max_length=128)
     environment: Literal["dev", "staging", "prod"] | None = None
@@ -28,8 +36,8 @@ class Scope(BaseModel):
 
 
 class Window(Scope):
-    start: AwareDatetime
-    end: AwareDatetime
+    start: AwareDatetime = Field(description="Inclusive UTC period start.")
+    end: AwareDatetime = Field(description="Exclusive UTC period end, no later than as_of.")
     currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
 
     @field_validator("start", "end")
@@ -46,7 +54,13 @@ class Window(Scope):
         return self
 
 
+class HealthQuery(Scope):
+    health: Literal["HEALTHY", "WARNING", "CRITICAL", "STALE", "NO_DATA"] | None = None
+    offset: int = Field(default=0, ge=0, le=100000)
+
+
 class CpuThreshold(Window):
+    min_breach_count: int = Field(default=1, ge=1, le=10000)
     cpu_threshold: Decimal = Field(default=Decimal("80"), ge=0, le=100)
 
 

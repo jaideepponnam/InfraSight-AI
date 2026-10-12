@@ -21,6 +21,7 @@ inventory AS (
 ), health AS (
     SELECT i.*, h.metric_id, h.observed_at, h.interval_end, h.cpu_usage_percent,
            h.memory_usage_percent, h.storage_usage_percent, h.server_status,
+           h.network_mbps, h.uptime_seconds, h.estimated_cost, h.currency, h.interval_seconds,
            h.resource_health AS recorded_resource_health,
            EXTRACT(EPOCH FROM CAST(:as_of AS timestamptz) - h.interval_end) AS
        completion_age_seconds,
@@ -33,7 +34,8 @@ inventory AS (
     FROM inventory i
     LEFT JOIN LATERAL (
         SELECT metric_id, observed_at, interval_end, cpu_usage_percent, memory_usage_percent,
-               storage_usage_percent, server_status, resource_health
+               storage_usage_percent, server_status, resource_health, network_mbps,
+               uptime_seconds, estimated_cost, currency, interval_seconds
         FROM analytics.high_resource_usage h
         WHERE h.server_id = i.server_id AND h.observed_at <= CAST(:as_of AS timestamptz)
           AND h.interval_end <= CAST(:as_of AS timestamptz)
@@ -116,7 +118,8 @@ SELECT COUNT(*) AS inventory_servers, COUNT(metric_id) AS servers_with_observati
        COUNT(*) FILTER (WHERE effective_health = 'NO_DATA') AS no_data_servers,
        AVG(cpu_usage_percent) FILTER (WHERE is_current) AS average_cpu_percent,
        AVG(memory_usage_percent) FILTER (WHERE is_current) AS average_memory_percent,
-       AVG(storage_usage_percent) FILTER (WHERE is_current) AS average_storage_percent
+       AVG(storage_usage_percent) FILTER (WHERE is_current) AS average_storage_percent,
+       MAX(observed_at) AS latest_telemetry_timestamp
 FROM health
 """
 )
@@ -131,7 +134,10 @@ SELECT source_id, provider, region_code, region_display_name, COUNT(*) AS invent
        COUNT(*) FILTER (WHERE effective_health = 'CRITICAL') AS critical_servers,
        COUNT(*) FILTER (WHERE effective_health = 'STALE') AS stale_servers,
        COUNT(*) FILTER (WHERE effective_health = 'NO_DATA') AS no_data_servers,
-       AVG(cpu_usage_percent) FILTER (WHERE is_current) AS average_cpu_percent
+       AVG(cpu_usage_percent) FILTER (WHERE is_current) AS average_cpu_percent,
+       AVG(memory_usage_percent) FILTER (WHERE is_current) AS average_memory_percent,
+       AVG(storage_usage_percent) FILTER (WHERE is_current) AS average_storage_percent,
+       MAX(observed_at) AS latest_telemetry_timestamp
 FROM health GROUP BY source_id, provider, region_code, region_display_name
 ORDER BY critical_servers DESC, region_code, source_id LIMIT :limit
 """
@@ -149,7 +155,7 @@ WHERE observed_at >= CAST(:start AS timestamptz) AND observed_at < CAST(:end AS 
     + FILTER
     + """
 GROUP BY server_id, external_server_id, server_name, source_id, provider, region_code, environment
-HAVING COUNT(*) FILTER (WHERE cpu_usage_percent > :cpu_threshold) > 0
+HAVING COUNT(*) FILTER (WHERE cpu_usage_percent > :cpu_threshold) >= :min_breach_count
 ORDER BY peak_cpu_percent DESC, server_id LIMIT :limit
 """
 )
@@ -181,7 +187,7 @@ FROM stats s JOIN health h USING (server_id)
 WHERE observation_count >= :min_samples AND coverage_fraction >= :min_coverage
   AND cost_coverage_fraction >= :min_coverage AND NOT overlap_detected AND NOT had_critical
   AND average_cpu_percent < :max_cpu AND average_memory_percent < :max_memory
-  AND estimated_cost >= :min_cost AND h.effective_health = 'HEALTHY'
+  AND s.estimated_cost >= :min_cost AND h.effective_health = 'HEALTHY'
 ORDER BY estimated_cost DESC, s.server_id LIMIT :limit
 """
 )
@@ -247,6 +253,7 @@ class AnalyticsRepository:
         values = query.model_dump()
         values.setdefault("cpu_threshold", Decimal("80"))
         values.setdefault("currency", None)
+        values.setdefault("min_breach_count", 1)
         return values
 
     def rows(self, statement, query):
@@ -276,12 +283,13 @@ class AnalyticsRepository:
         )
 
     def top_resource(self, query, resource):
-        if resource not in {"cpu_usage_percent", "memory_usage_percent"}:
+        if resource not in {"cpu_usage_percent", "memory_usage_percent", "storage_usage_percent"}:
             raise ValueError("Resource ordering is restricted to approved fields")
         return self.rows(
             "WITH "
             + HEALTH_CTES
-            + f"SELECT * FROM health WHERE is_current ORDER BY {resource} DESC, "
+            + f"SELECT * FROM health WHERE is_current AND {resource} IS NOT NULL "
+            + f"ORDER BY {resource} DESC, "
             "server_id LIMIT :limit",
             query,
         )
@@ -307,3 +315,41 @@ class AnalyticsRepository:
         if query.currency is None:
             raise ValueError("Cost comparison requires one explicit currency")
         return self.rows(PERIOD_COST_SQL, query)[0]
+
+    def health_page(self, query):
+        return self.rows(
+            "WITH " + HEALTH_CTES + "SELECT * FROM health "
+            "WHERE CAST(:health AS text) IS NULL OR effective_health = CAST(:health AS text) "
+            "ORDER BY server_id LIMIT :limit OFFSET :offset",
+            query,
+        )
+
+    def health_count(self, query):
+        return self.rows(
+            "WITH " + HEALTH_CTES + "SELECT COUNT(*) AS total FROM health "
+            "WHERE CAST(:health AS text) IS NULL OR effective_health = CAST(:health AS text)",
+            query,
+        )[0]["total"]
+
+    def region_costs(self, query):
+        return self.rows(
+            "WITH "
+            + HEALTH_CTES
+            + ","
+            + WINDOW_CTES
+            + """
+SELECT source_id, region_code, SUM(estimated_cost) AS estimated_cost,
+       CAST(:currency AS text) AS currency,
+       SUM(coverage_seconds) / NULLIF((SELECT COUNT(*) FROM inventory i
+            WHERE i.source_id = stats.source_id AND i.region_code = stats.region_code)
+            * EXTRACT(EPOCH FROM CAST(:end AS timestamptz)-CAST(:start AS timestamptz)),0)
+            AS coverage_fraction,
+       SUM(priced_coverage_seconds) / NULLIF((SELECT COUNT(*) FROM inventory i
+            WHERE i.source_id = stats.source_id AND i.region_code = stats.region_code)
+            * EXTRACT(EPOCH FROM CAST(:end AS timestamptz)-CAST(:start AS timestamptz)),0)
+            AS cost_coverage_fraction,
+       BOOL_OR(overlap_detected) AS overlap_detected
+FROM stats GROUP BY source_id, region_code
+""",
+            query,
+        )

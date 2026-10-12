@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     analytics_max_window_days: int = Field(default=7, ge=1, le=7)
     analytics_max_results: int = Field(default=100, ge=1, le=100)
 
+    api_read_key: SecretStr | None = None
+    api_admin_key: SecretStr | None = None
+    etl_api_max_window_seconds: int = Field(default=600, ge=90, le=3600)
+
     etl_batch_size: int = Field(default=500, ge=1, le=1000)
     etl_overlap_seconds: int = Field(default=60, ge=0, le=3600)
     etl_initial_lookback_seconds: int = Field(default=120, ge=1, le=86400)

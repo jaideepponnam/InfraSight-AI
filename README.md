@@ -107,3 +107,13 @@ Migration 0002 adds the analytics schema with six approved public views and a pr
 See [analytics definitions](docs/analytics_dictionary.md), [actual Phase 4 results and inspection commands](docs/phase4_demo.md), and [measured query plans](docs/analytics_query_plans.md). No additional index or materialized view was justified by the 9,000-observation benchmark. The schema domain tables and ETL rules are unchanged. Alembic check verifies domain model metadata; the explicit migration and integration tests verify view definitions/behavior.
 
 The demo preserves existing data and ingests only two small comparison windows under a separate source ID. Read-only-role tests prove approved view/service reads succeed while internal table reads fail. No production role credentials or HTTP endpoints are added in this phase.
+
+## Phase 5 REST API
+
+Versioned business endpoints are available under `/api/v1`. Set `API_READ_KEY` and
+`API_ADMIN_KEY` through environment variables or your ignored `.env`. Business reads
+require `X-API-Key`; synchronous ETL execution additionally requires `X-Admin-Key`.
+Health/readiness and Swagger remain public. No queues, AI, or dashboard are included.
+
+See [the Phase 5 HTTP/Swagger demo](docs/phase5_demo.md) for startup, authorization,
+endpoint inspection, replay verification, and exact business metadata.

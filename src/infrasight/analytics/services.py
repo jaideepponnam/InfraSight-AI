@@ -34,7 +34,10 @@ class AnalyticsService:
                     yield AnalyticsRepository(connection)
 
     def _validate(self, query):
+        supplied_freshness = "freshness_seconds" in query.model_fields_set
         query = type(query).model_validate(query.model_dump())
+        if self.settings is not None and not supplied_freshness:
+            query.freshness_seconds = self.settings.analytics_freshness_seconds
         max_days = self.settings.analytics_max_window_days if self.settings else 7
         max_results = self.settings.analytics_max_results if self.settings else 100
         if query.limit > max_results:
@@ -207,5 +210,136 @@ class AnalyticsService:
                 previous_start=yesterday,
                 previous_end=previous_end,
                 allow_unequal_duration=not equivalent_elapsed,
+            )
+        )
+
+    def top_storage(self, query):
+        return self._report(query, "top_resource", "storage_usage_percent")
+
+    def health_page(self, query):
+        query = self._validate(query)
+        with self._repository() as repository:
+            rows = repository.health_page(query)
+            total = repository.health_count(query)
+        return {
+            "data": rows,
+            "meta": {
+                "reference_time": query.as_of,
+                "freshness_seconds": query.freshness_seconds,
+                "filters": query.model_dump(),
+                "pagination": {"offset": query.offset, "limit": query.limit, "total": total},
+            },
+        }
+
+    def overview(self, query):
+        query = self._validate(query)
+        leader_query = query.model_copy(update={"limit": 1})
+        # Four fixed queries share one snapshot, independent of fleet size.
+        with self._repository() as repository:
+            totals = repository.totals(query)[0]
+            cpu = repository.top_resource(leader_query, "cpu_usage_percent")
+            cost = repository.period_cost(query)
+            leaders = repository.top_cost(leader_query)
+        totals.update(
+            observed_cost=cost["estimated_cost"],
+            currency=query.currency,
+            coverage=cost,
+            highest_cpu_server=cpu[0] if cpu else None,
+            highest_cost_server=leaders[0] if leaders else None,
+        )
+        return AnalyticsReport(
+            reference_time=query.as_of,
+            window_start=query.start,
+            window_end=query.end,
+            currency=query.currency,
+            rows=[totals],
+            parameters=query.model_dump(),
+            warnings=["Overlapping intervals require review."] if cost["overlap_detected"] else [],
+        )
+
+    def regions(self, query):
+        query = self._validate(query)
+        with self._repository() as repository:
+            rows = repository.regional_health(query)
+            costs = repository.region_costs(query)
+        cost_map = {(r["source_id"], r["region_code"]): r for r in costs}
+        for row in rows:
+            row["period_cost"] = cost_map.get(
+                (row["source_id"], row["region_code"]),
+                {
+                    "estimated_cost": None,
+                    "currency": query.currency,
+                    "coverage_fraction": None,
+                    "cost_coverage_fraction": None,
+                },
+            )
+        return AnalyticsReport(
+            reference_time=query.as_of,
+            window_start=query.start,
+            window_end=query.end,
+            currency=query.currency,
+            rows=rows,
+            parameters=query.model_dump(),
+        )
+
+    def cost_summary(self, query):
+        query = self._validate(query)
+        with self._repository() as repository:
+            cost = repository.period_cost(query)
+            cost["top_cost_servers"] = repository.top_cost(query)
+        return AnalyticsReport(
+            reference_time=query.as_of,
+            window_start=query.start,
+            window_end=query.end,
+            currency=query.currency,
+            rows=[cost],
+            parameters=query.model_dump(),
+            warnings=["Overlapping intervals require review."] if cost["overlap_detected"] else [],
+        )
+
+    def api_comparison(self, params):
+        base = {k: getattr(params, k) for k in Scope.model_fields}
+        supplied = [
+            params.current_start,
+            params.current_end,
+            params.previous_start,
+            params.previous_end,
+        ]
+        if params.mode == "explicit":
+            return self.compare_cost(
+                Comparison(
+                    **base,
+                    currency=params.currency,
+                    current_start=params.current_start,
+                    current_end=params.current_end,
+                    previous_start=params.previous_start,
+                    previous_end=params.previous_end,
+                    min_coverage=params.min_coverage,
+                )
+            )
+        if any(v is not None for v in supplied):
+            raise ValueError("Explicit windows require explicit comparison mode")
+        today = params.as_of.replace(hour=0, minute=0, second=0, microsecond=0)
+        if params.mode == "completed_days":
+            current_start, current_end = today - timedelta(days=1), today
+            previous_start, previous_end = today - timedelta(days=2), current_start
+        else:
+            current_start, current_end = today, params.as_of
+            previous_start = today - timedelta(days=1)
+            previous_end = (
+                previous_start + (params.as_of - today)
+                if params.mode == "equivalent_elapsed"
+                else today
+            )
+        return self.compare_cost(
+            Comparison(
+                **base,
+                currency=params.currency,
+                current_start=current_start,
+                current_end=current_end,
+                previous_start=previous_start,
+                previous_end=previous_end,
+                min_coverage=params.min_coverage,
+                allow_unequal_duration=params.mode == "today_vs_yesterday",
             )
         )

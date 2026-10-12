@@ -6,7 +6,9 @@ import structlog
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from infrasight.api.errors import install_handlers
 from infrasight.api.health import router
+from infrasight.api.router import router as business_router
 from infrasight.config import Settings, get_settings
 from infrasight.db.session import create_database_engine, create_session_factory
 from infrasight.logging import configure_logging
@@ -20,6 +22,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         engine = create_database_engine(settings)
+        app.state.engine = engine
         app.state.session_factory = create_session_factory(engine)
         logger.info("application_started", environment=settings.app_env)
         try:
@@ -31,6 +34,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
     app.include_router(router)
+    app.include_router(business_router)
 
     @app.middleware("http")
     async def request_context(request: Request, call_next):
@@ -60,7 +64,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return JSONResponse(
             status_code=500,
             headers={"X-Request-ID": request_id},
-            content={"error": "internal_server_error", "request_id": request_id},
+            content={
+                "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "The request could not be completed.",
+                    "details": [],
+                },
+                "request_id": request_id,
+            },
         )
 
+    original_openapi = app.openapi
+
+    def openapi_with_combined_admin_security():
+        schema = original_openapi()
+        schema["paths"]["/api/v1/etl/run"]["post"]["security"] = [
+            {"ApplicationKey": [], "AdminKey": []}
+        ]
+        return schema
+
+    app.openapi = openapi_with_combined_admin_security
+    install_handlers(app)
     return app
