@@ -16,6 +16,7 @@ dependencies = [
 
 [project.optional-dependencies]
 host = ["psutil>=6,<8"]
+dashboard = ["streamlit>=1.50,<2", "altair>=5,<7"]
 
 [project.scripts]
 infrasight-etl = "infrasight.ingestion.cli:main"
