@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
-from infrasight.ai.harness import AnalyticsHarness
+from infrasight.ai.harness import AnalyticsHarness, provider_result
 from infrasight.ai.provider import AIError, Completion, GroqProvider
 from infrasight.ai.schemas import QueryRequest
 from infrasight.ai.tools import TOOLS, ToolRegistry
@@ -78,6 +78,7 @@ def service():
     for name in (
         "overview",
         "health",
+        "fleet_totals",
         "high_cpu_breaches",
         "top_cpu",
         "top_memory",
@@ -496,3 +497,93 @@ def test_provider_rejection_diagnostics(settings, status, body, category, code, 
     ]
     assert "private" not in json.dumps(events)
     assert "private" not in str(raised.value)
+
+
+@pytest.mark.parametrize("rows", [[], [{"value": "1.20"}], [{"a": 1}, {"b": 2}]])
+def test_provider_result_keeps_small_or_nonuniform_rows(rows):
+    result = {"rows": rows, "currency": "USD"}
+    assert provider_result(result) is result
+
+
+def test_prod_server_list_compact_round_trip(settings, context, service):
+    context.question = "get me status on servers from prod"
+    rows = [
+        {
+            "server_id": f"server-{i}",
+            "server_name": f"production-{i}",
+            "source_id": "simulated-cloud",
+            "environment": "prod",
+            "region_code": "us-south",
+            "cpu_usage_percent": "42.125",
+            "memory_usage_percent": "51.625",
+            "storage_usage_percent": None,
+            "estimated_cost": "0.00012345",
+            "currency": "USD",
+            "observed_at": END.isoformat(),
+            "effective_health": "STALE" if i == 0 else "HEALTHY",
+            "completion_age_seconds": 150 if i == 0 else 0,
+        }
+        for i in range(10)
+    ]
+    service.health.return_value = AnalyticsReport(
+        reference_time=END,
+        currency="USD",
+        parameters={"freshness_seconds": 120, "environment": "prod"},
+        rows=rows,
+    )
+    provider = FakeProvider(
+        [
+            call("get_server_health", '{"environment":"prod"}'),
+            Completion(content="A bounded production-server list; one recorded server is stale."),
+        ]
+    )
+    response = asyncio.run(AnalyticsHarness(provider, service, settings).query(context, "prod"))
+    query = service.health.call_args.args[0]
+    assert query.environment == "prod" and query.source_id == "simulated-cloud"
+    original = response.evidence.tool_results[0].result
+    wire = json.loads(provider.requests[1]["messages"][-1]["content"])
+    restored = [dict(zip(wire["row_columns"], row, strict=True)) for row in wire["rows"]]
+    assert restored == original["rows"]
+    assert original["rows"] == rows
+    assert original["result_may_be_truncated"] is True
+    assert wire["result_may_be_truncated"] is True
+    assert wire["parameters"] == original["parameters"]
+    assert "row_columns" not in original
+    assert len(json.dumps(wire)) < len(json.dumps(original)) * 0.7
+    assert response.evidence.freshness["per_tool"][0]["servers"][0]["effective_health"] == "STALE"
+
+
+def test_rate_limit_after_tool_does_not_fabricate_or_retry(settings, context, service):
+    provider = FakeProvider(
+        [call("get_server_health", '{"environment":"prod"}'), AIError("AI_RATE_LIMITED", 429)]
+    )
+    with pytest.raises(AIError, match="AI_RATE_LIMITED"):
+        asyncio.run(AnalyticsHarness(provider, service, settings).query(context, "limited"))
+    assert len(provider.requests) == 2
+    service.health.assert_called_once()
+
+
+def test_rate_limit_logs_only_allowlisted_numeric_quota(settings):
+    from structlog.testing import capture_logs
+
+    settings.groq_api_key = SecretStr("private-key")
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            429,
+            headers={
+                "retry-after": "12",
+                "x-ratelimit-limit-tokens": "8000",
+                "x-ratelimit-remaining-tokens": "0",
+                "x-ratelimit-remaining-requests": "private-untrusted-header",
+                "authorization": "private-header",
+            },
+            json={"error": {"code": "rate_limit_exceeded", "message": "private-message"}},
+        )
+    )
+    with capture_logs() as events, pytest.raises(AIError, match="AI_RATE_LIMITED"):
+        asyncio.run(GroqProvider(settings, transport).complete([], [], "none"))
+    quota = next(event for event in events if event["event"] == "ai_provider_quota")
+    assert quota["retry_after_seconds"] == 12
+    assert quota["token_limit"] == 8000 and quota["tokens_remaining"] == 0
+    assert "requests_remaining" not in quota
+    assert "private" not in json.dumps(events)

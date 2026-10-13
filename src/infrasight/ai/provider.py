@@ -101,6 +101,24 @@ class GroqProvider:
                     request_id=structlog.contextvars.get_contextvars().get("request_id"),
                 )
             if response.status_code == 429:
+                # Numeric quota metadata only: never log provider messages or headers wholesale.
+                quota = {}
+                for header, field in (
+                    ("retry-after", "retry_after_seconds"),
+                    ("x-ratelimit-limit-tokens", "token_limit"),
+                    ("x-ratelimit-remaining-tokens", "tokens_remaining"),
+                    ("x-ratelimit-limit-requests", "request_limit"),
+                    ("x-ratelimit-remaining-requests", "requests_remaining"),
+                ):
+                    value = response.headers.get(header, "")
+                    if value.isascii() and value.isdigit() and len(value) <= 10:
+                        quota[field] = int(value)
+                if quota:
+                    structlog.get_logger(__name__).warning(
+                        "ai_provider_quota",
+                        request_id=structlog.contextvars.get_contextvars().get("request_id"),
+                        **quota,
+                    )
                 raise AIError("AI_RATE_LIMITED", 429)
             if response.status_code in (401, 403):
                 raise AIError("AI_PROVIDER_CONFIGURATION", 503)

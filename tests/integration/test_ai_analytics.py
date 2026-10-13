@@ -90,3 +90,48 @@ def test_ai_stale_and_no_data_evidence(analytics_data, settings):
     rows = response.evidence.tool_results[0].result["rows"]
     assert {r["effective_health"] for r in rows} == {"STALE", "NO_DATA"}
     assert len(response.evidence.freshness["per_tool"][0]["servers"]) == 2
+
+
+@pytest.mark.parametrize("environment", ["prod", "dev", "staging"])
+def test_server_status_counts_entire_filtered_cohort(analytics_data, settings, environment):
+    import json
+
+    from sqlalchemy import update
+
+    from infrasight.ai.tools import ToolRegistry
+    from infrasight.db.models import Server
+
+    data = analytics_data
+    for index in range(15):
+        server = data.server(f"{environment}-{index}")
+        data.db.execute(update(Server).where(Server.id == server).values(environment=environment))
+        if index < 11:
+            data.metric(server, health="CRITICAL" if index < 2 else "HEALTHY")
+        elif index == 11:
+            data.metric(server, health="WARNING")
+        elif index == 12:
+            data.metric(server, observed=data.start - timedelta(minutes=5))
+        # Last two deliberately have NO_DATA.
+    other = data.server("other-environment")
+    other_environment = "dev" if environment == "prod" else "prod"
+    data.db.execute(update(Server).where(Server.id == other).values(environment=other_environment))
+    data.metric(other, health="CRITICAL")
+    context = QueryRequest(
+        question=f"server status on {environment} environment",
+        source_id="fixture",
+        reference_time=data.start + timedelta(seconds=30),
+    )
+    result = ToolRegistry(AnalyticsService(data.db, settings), settings, context).execute(
+        "get_server_health", json.dumps({"environment": environment, "limit": 3})
+    )
+    summary = result["fleet_summary"]
+    assert summary["inventory_servers"] == 15
+    assert summary["healthy_servers"] == 9
+    assert summary["critical_servers"] == 2
+    assert summary["warning_servers"] == 1
+    assert summary["stale_servers"] == 1
+    assert summary["no_data_servers"] == 2
+    assert summary["reporting_servers"] == 12
+    assert len(result["rows"]) == 3
+    assert all(row["environment"] == environment for row in result["rows"])
+    assert result["result_may_be_truncated"] is True

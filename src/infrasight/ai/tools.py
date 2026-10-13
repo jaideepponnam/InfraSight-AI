@@ -68,8 +68,9 @@ TOOLS = {
         Window,
     ),
     "get_server_health": Tool(
-        "Latest effective health per server; STALE and NO_DATA are separate states. "
-        "Bounded list, not fleet totals.",
+        "Server status for the whole filtered fleet, including prod/dev/staging: "
+        "fleet_summary contains complete health counts; rows are bounded examples only. "
+        "STALE and NO_DATA are separate states.",
         StrictScope,
         "health",
     ),
@@ -176,6 +177,7 @@ class ToolRegistry:
         tool = TOOLS.get(name)
         if tool is None:
             raise AIError("AI_UNKNOWN_TOOL")
+        fleet_summary = None
         try:
             args = tool.arguments.model_validate_json(arguments)
             provided = args.model_dump(exclude_unset=True)
@@ -246,6 +248,11 @@ class ToolRegistry:
             else:
                 query = args.query(tool.query_model, tool.lookback) if tool.query_model else args
                 report = getattr(self.service, tool.method)(query)
+                if name == "get_server_health":
+                    # Reuse approved aggregate SQL with exactly the same cohort/reference.
+                    # Counts never come from the bounded detail rows.
+                    totals = self.service.fleet_totals(query).model_dump(mode="json")
+                    fleet_summary = totals["rows"][0]
         except (ValidationError, ValueError) as exc:
             raise AIError("AI_INVALID_TOOL_ARGUMENTS") from exc
         except AIError:
@@ -253,6 +260,8 @@ class ToolRegistry:
         except Exception as exc:
             raise AIError("AI_ANALYTICS_UNAVAILABLE", 503) from exc
         result = report.model_dump(mode="json")
+        if fleet_summary is not None:
+            result["fleet_summary"] = fleet_summary
         if len(result["rows"]) > values["limit"]:
             raise AIError("AI_RESULT_LIMIT_EXCEEDED")
         result["row_limit"] = values["limit"]
@@ -263,7 +272,8 @@ class ToolRegistry:
 def metadata(result: dict[str, Any]):
     """Expose backend-supplied evidence; never calculate new business measures."""
     coverage, freshness = [], {"threshold_seconds": result["parameters"]["freshness_seconds"]}
-    for row in result["rows"]:
+    summary_rows = [result["fleet_summary"]] if "fleet_summary" in result else []
+    for row in [*summary_rows, *result["rows"]]:
         selected = {k: v for k, v in row.items() if "coverage" in k and not isinstance(v, dict)}
         if selected:
             coverage.append(selected)
