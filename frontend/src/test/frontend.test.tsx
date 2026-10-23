@@ -209,7 +209,13 @@ describe("AI analyst", () => {
         reference_time: snapshot().reference_time,
         window: { start: snapshot().start, end: snapshot().end },
         freshness: { threshold_seconds: 120 },
-        coverage: [],
+        coverage: [
+          {
+            kind: "period_cost",
+            coverage_fraction: "0.993",
+            cost_coverage_fraction: "0.993",
+          },
+        ],
         currency: "USD",
         tool_results: [],
       },
@@ -224,6 +230,11 @@ describe("AI analyst", () => {
     expect(screen.getByText("Health:")).toBeInTheDocument();
     expect(screen.getByText("Review freshness before acting.")).toBeInTheDocument();
     expect(screen.getByText("get_overview")).toBeInTheDocument();
+    const coverageRow = document.querySelector(".coverage-evidence");
+    expect(coverageRow).not.toBeNull();
+    expect(coverageRow?.querySelectorAll("span")).toHaveLength(3);
+    expect(coverageRow?.textContent).toContain("coverage fraction");
+    expect(coverageRow?.textContent).toContain("cost coverage fraction");
     expect(screen.getByRole("button", { name: "Evidence" })).toHaveAttribute(
       "aria-expanded",
       "false",

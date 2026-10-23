@@ -745,6 +745,15 @@ tr:last-child td {
   margin-top: 12px;
   color: #525252;
 }
+.coverage-evidence span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
 .coverage-evidence b {
   font-weight: 400;
   color: var(--muted);
