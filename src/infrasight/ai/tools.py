@@ -139,6 +139,20 @@ class ToolRegistry:
         schemas = []
         for name, tool in TOOLS.items():
             schema = tool.arguments.model_json_schema()
+            # Backend-controlled fields do not need to be advertised to Groq.
+            context_controlled = {
+                "as_of",
+                "freshness_seconds",
+                "source_id",
+                "currency",
+            }
+            for field in context_controlled:
+                schema["properties"].pop(field, None)
+            if "required" in schema:
+                schema["required"] = [
+                    field for field in schema["required"]
+                    if field not in context_controlled
+                ]
             # Keep the complete typed contract visible; execution still freezes context.
             context_defaults = {
                 "as_of": self.context.model_dump(mode="json")["reference_time"],
