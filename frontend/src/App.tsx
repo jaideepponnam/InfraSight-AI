@@ -21,6 +21,7 @@ import { AppHeader, type HeaderPage } from "./AppHeader";
 import { DemoETLAction } from "./DemoETLAction";
 import { DatabaseSample } from "./DatabaseSample";
 import { AnalystAnswer } from "./AnalystAnswer";
+import { CoverageEvidence } from "./CoverageEvidence";
 import { date, money, numeric, percent, telemetryState } from "./format";
 import type { AIResponse, Context, Overview, Region, Run } from "./types";
 
@@ -324,25 +325,7 @@ export function AIAnalyst({
                     <dd>{evidence.currency}</dd>
                   </div>
                 </dl>
-                <div className="section-label">COVERAGE · BACKEND EVIDENCE</div>
-                {evidence.coverage.length ? (
-                  evidence.coverage.slice(0, 4).map((c, i) => (
-                    <div className="coverage-evidence" key={i}>
-                      {Object.entries(c).map(([k, v]) => (
-                        <span key={k}>
-                          <b>{k.replaceAll("_", " ")}</b>:{" "}
-                          {k.endsWith("fraction")
-                            ? percent(v, true)
-                            : String(v ?? "Not available")}
-                        </span>
-                      ))}
-                    </div>
-                  ))
-                ) : (
-                  <p className="support">
-                    Coverage was not supplied by the selected tools.
-                  </p>
-                )}
+                <CoverageEvidence coverage={evidence.coverage} />
               </div>
               <Accordion>
                 <AccordionItem title="Evidence" open={false}>

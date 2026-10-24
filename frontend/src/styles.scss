@@ -718,10 +718,10 @@ tr:last-child td {
 .provenance .cds--tag {
   margin-top: 10px;
 }
-.provenance dl {
+.provenance > dl {
   margin: 18px 0;
 }
-.provenance dl > div {
+.provenance > dl > div {
   display: grid;
   grid-template-columns: 110px minmax(0, 1fr);
   gap: 16px;
@@ -736,27 +736,48 @@ tr:last-child td {
   margin: 0;
   overflow-wrap: anywhere;
 }
-.coverage-evidence {
-  font-size: 10px;
-  line-height: 1.7;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
+.coverage-list {
+  list-style: none;
+  padding: 0;
   margin-top: 12px;
-  color: #525252;
+  display: grid;
+  gap: 12px;
 }
-.coverage-evidence span {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  padding: 3px 8px;
+.coverage-evidence {
+  padding: 12px;
   border: 1px solid var(--border);
   border-radius: 4px;
+  background: #fff;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #525252;
 }
-
-.coverage-evidence b {
-  font-weight: 400;
-  color: var(--muted);
+.coverage-evidence h3 {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+.coverage-evidence dl {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.coverage-evidence dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px 16px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.coverage-evidence dt, .coverage-evidence dd {
+  overflow-wrap: anywhere;
+}
+.coverage-evidence dd {
+  color: #161616;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 42rem) {
+  .coverage-evidence dl > div {grid-template-columns: minmax(0, 1fr);}
 }
 .tool-detail h3 {
   font-size: 13px;
@@ -1199,7 +1220,7 @@ nav button[aria-current="page"] svg {color: #0f62fe;}
   .suggestion span:not(.suggestion-index) {flex: 1; min-width: 0;}
   .answer-markdown {font-size: 15px;}
   .answer-markdown .answer-fact > strong:first-child {min-width: 0; margin-right: 0.35rem;}
-  .provenance dl > div {grid-template-columns: minmax(0, 1fr); gap: 4px;}
+  .provenance > dl > div {grid-template-columns: minmax(0, 1fr); gap: 4px;}
   .provenance .cds--tag {max-width: 100%;}
   .pipeline-path {flex-direction: column; align-items: stretch; gap: 0; margin: 20px 0;}
   .pipeline-path > div {flex-basis: auto; padding: 14px 0; border-bottom: 1px solid var(--border);}

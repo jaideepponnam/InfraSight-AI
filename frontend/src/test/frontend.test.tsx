@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Theme } from "@carbon/react";
 import {
@@ -230,11 +230,10 @@ describe("AI analyst", () => {
     expect(screen.getByText("Health:")).toBeInTheDocument();
     expect(screen.getByText("Review freshness before acting.")).toBeInTheDocument();
     expect(screen.getByText("get_overview")).toBeInTheDocument();
-    const coverageRow = document.querySelector(".coverage-evidence");
-    expect(coverageRow).not.toBeNull();
-    expect(coverageRow?.querySelectorAll("span")).toHaveLength(3);
-    expect(coverageRow?.textContent).toContain("coverage fraction");
-    expect(coverageRow?.textContent).toContain("cost coverage fraction");
+    const coverage = within(screen.getByRole("region", { name: "Coverage backend evidence" }));
+    expect(coverage.getByText("period_cost")).toBeInTheDocument();
+    expect(coverage.getByText("Observation-time coverage").nextElementSibling).toHaveTextContent("99.3%");
+    expect(coverage.getByText("Priced observation-time coverage").nextElementSibling).toHaveTextContent("99.3%");
     expect(screen.getByRole("button", { name: "Evidence" })).toHaveAttribute(
       "aria-expanded",
       "false",
