@@ -13,7 +13,7 @@ def test_analytics_downgrade_reupgrade_preserves_base_data(analytics_db, analyti
     data.metric(data.server())
     config = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
     config.attributes["connection"] = analytics_db
-    assert analytics_db.scalar(text("SELECT version_num FROM alembic_version")) == "0002"
+    assert analytics_db.scalar(text("SELECT version_num FROM alembic_version")) == "0003"
     command.downgrade(config, "0001")
     assert "analytics" not in inspect(analytics_db).get_schema_names()
     assert analytics_db.scalar(text("SELECT COUNT(*) FROM infrastructure_metrics")) == 1

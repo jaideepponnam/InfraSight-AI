@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [main]
+    branches: [main, feature/sre-incident-engine]
   pull_request:
   workflow_dispatch:
 permissions:
@@ -33,7 +33,15 @@ jobs:
           python-version: "3.11"
       - run: uv sync --frozen --all-extras
       - run: uv run --frozen --no-sync ruff check .
-      - run: uv run --frozen --no-sync ruff format --check src/infrasight/config.py src/infrasight/main.py tests/unit/test_production.py scripts/validate_deployment.py
+      - run: >-
+          uv run --frozen --no-sync ruff format --check
+          src/infrasight/config.py src/infrasight/main.py
+          src/infrasight/sre src/infrasight/db/models/sre.py
+          src/infrasight/api/sre.py src/infrasight/api/sre_demo.py
+          tests/unit/test_production.py tests/unit/test_sre_lifecycle.py
+          tests/unit/test_sre_security.py tests/integration/test_sre_demo.py
+          tests/integration/test_sre_incidents.py tests/integration/test_sre_migrations.py
+          migrations/versions/0003_create_sre_schema.py scripts/validate_deployment.py
       - run: uv run --frozen --no-sync python scripts/validate_deployment.py
       - run: uv run --frozen --no-sync alembic upgrade head
       - run: uv run --frozen --no-sync alembic check

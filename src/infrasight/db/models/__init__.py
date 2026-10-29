@@ -7,6 +7,14 @@ from infrasight.db.models.ingestion_state import IngestionState
 from infrasight.db.models.raw_telemetry import RawTelemetry
 from infrasight.db.models.region import Region
 from infrasight.db.models.server import Server
+from infrasight.db.models.sre import (
+    SREDemoRun,
+    SREIncident,
+    SREIncidentEvent,
+    SREProbeResult,
+    SRERecoveryAttempt,
+    SREService,
+)
 
 __all__ = [
     "Region",
@@ -16,4 +24,10 @@ __all__ = [
     "InfrastructureMetric",
     "DataQualityRejection",
     "IngestionState",
+    "SREService",
+    "SREDemoRun",
+    "SREProbeResult",
+    "SREIncident",
+    "SREIncidentEvent",
+    "SRERecoveryAttempt",
 ]

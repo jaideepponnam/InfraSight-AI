@@ -1,3 +1,4 @@
+import os
 from functools import lru_cache
 from typing import Literal
 from urllib.parse import urlsplit
@@ -47,6 +48,15 @@ class Settings(BaseSettings):
     ai_max_result_rows: int = Field(default=20, ge=1, le=50)
 
     etl_api_max_window_seconds: int = Field(default=600, ge=90, le=3600)
+
+    # Loopback is the hosted application's own listener, never a client-selected URL.
+    sre_enabled: bool = False
+    sre_probe_port: int = Field(
+        default_factory=lambda: int(os.getenv("PORT", "10000")), ge=1024, le=65535
+    )
+    sre_probe_timeout_seconds: float = Field(default=2, ge=0.1, le=5)
+    sre_run_deadline_seconds: int = Field(default=120, ge=30, le=120)
+    sre_cooldown_seconds: int = Field(default=60, ge=0, le=3600)
 
     etl_batch_size: int = Field(default=500, ge=1, le=1000)
     etl_overlap_seconds: int = Field(default=60, ge=0, le=3600)

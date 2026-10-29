@@ -118,3 +118,16 @@ The ETL pipeline, validation, PostgreSQL storage, analytics, REST APIs, AI tool 
 ## Public deployment
 
 Render static frontend + Render FastAPI service + Neon direct PostgreSQL + Cloudflare DNS. See [the deployment runbook](docs/deployment.md) for initialization, environment boundaries, CI, and exact domain configuration. Deployment is manual; no startup seeding is performed.
+
+## InfraSight AI 2.0: SRE Milestone 1
+
+The feature branch adds an admin-only incident engine with actual HTTP probes,
+PostgreSQL evidence, deduplicated incidents, acknowledgement, and verified recovery.
+Its first scenario is a controlled application-dependency HTTP 503 failure, not a
+storage outage. It runs on demand without a background worker. Existing telemetry,
+analytics, Scout and frontend features remain available.
+
+SRE is disabled by default. No SRE pages or Scout incident integration are included.
+See [the Milestone 1 runbook](docs/sre_milestone1.md) for the API, limitations, and exact
+local review instructions using a disposable database. Production deployment and
+migration require separate approval.

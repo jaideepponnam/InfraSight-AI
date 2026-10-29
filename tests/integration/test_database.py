@@ -32,7 +32,7 @@ def test_database_connectivity_and_transaction_cleanup(database_settings):
             session.execute(text("SET LOCAL application_name = 'infrasight_rollback_test'"))
         with factory() as session:
             assert session.scalar(text("SHOW application_name")) != "infrasight_rollback_test"
-        assert len(Base.metadata.tables) == 7
+        assert len(Base.metadata.tables) == 13
     finally:
         engine.dispose()
 

@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from infrasight.api.errors import install_handlers
 from infrasight.api.health import router
 from infrasight.api.router import router as business_router
+from infrasight.api.sre_demo import router as sre_demo_router
 from infrasight.config import Settings, get_settings
 from infrasight.db.session import create_database_engine, create_session_factory
 from infrasight.logging import configure_logging
@@ -45,6 +46,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.include_router(router)
     app.include_router(business_router)
+    app.include_router(sre_demo_router)
 
     @app.middleware("http")
     async def request_context(request: Request, call_next):
@@ -88,9 +90,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     def openapi_with_combined_admin_security():
         schema = original_openapi()
-        schema["paths"]["/api/v1/etl/run"]["post"]["security"] = [
-            {"ApplicationKey": [], "AdminKey": []}
-        ]
+        for path, operations in schema["paths"].items():
+            if path == "/api/v1/etl/run" or path.startswith("/api/v1/sre/"):
+                if "post" in operations:
+                    operations["post"]["security"] = [{"ApplicationKey": [], "AdminKey": []}]
         return schema
 
     app.openapi = openapi_with_combined_admin_security

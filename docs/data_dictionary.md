@@ -1,4 +1,10 @@
-# InfraSight-AI data dictionary (schema Phase 2; ingestion Phase 3)
+# InfraSight-AI data dictionary (telemetry plus SRE Milestone 1)
+
+The original seven telemetry tables below retain their schema and semantics.
+Migration 0003 adds six independent SRE tables, described at the end of this document.
+
+For SRE API contracts, lifecycle semantics, and local review, see
+[sre_milestone1.md](sre_milestone1.md).
 
 ## Identity and source convention
 
@@ -251,3 +257,44 @@ Phase 3 validates provider consistency within an adapter and constructs source/r
 Database head 0002 adds an analytics schema without changing the seven domain tables introduced by 0001. Six public normal views expose approved business datasets; a private helper performs UTC interval allocation. No public view depends on custom session settings. Parameterized AnalyticsService queries implement runtime reference times, freshness thresholds, currencies, windows, pressure/optimization rules, and comparisons. Raw payloads, rejection details, and internal errors remain outside the public analytics contract.
 
 The exact business definitions, coverage/cost assumptions, per-view columns, and limitations are in docs/analytics_dictionary.md. Recorded database answers and inspection queries are in docs/phase4_demo.md. Existing indexes were measured; no new index was added.
+
+## SRE incident domain (migration 0003)
+
+The following six tables are independent of the telemetry graph. Every ID and foreign
+key is UUID, generated IDs default to gen_random_uuid(), and foreign keys use RESTRICT.
+All timestamps are TIMESTAMPTZ. Evidence is required JSONB written by the backend;
+raw HTTP bodies, API keys and plaintext capabilities are excluded.
+
+| Table | Principal columns and semantics |
+| --- | --- |
+| sre_services | id, unique service_key fixed to controlled-application-dependency, description, created_at |
+| sre_demo_runs | id, service_id, scenario=http-503, idempotency_key, status, phase, probe_token_hash, fault_enabled, fault_expires_at, fault_cleared_at, deadline_at, finished_at, error_code, created_at |
+| sre_probe_results | id, run_id, phase, observed_at, duration_ms NUMERIC(12,3), nullable http_status and target_request_id, outcome, initiating request_id, evidence |
+| sre_incidents | id, service_id, run_id, fingerprint, title, severity=SEV3, state, policy_version, detected_at, acknowledged_at, resolved_at, version |
+| sre_incident_events | id, incident_id, sequence, event_type, actor, from_state, to_state, request_id, evidence, created_at |
+| sre_recovery_attempts | id, incident_id, idempotency_key, action=clear-controlled-dependency-fault, status, error_code, action_applied, evidence, request_id, started_at, finished_at |
+
+Run status is ACTIVE/SUCCEEDED/FAILED/INTERRUPTED; phase is
+CREATED/BASELINE/FAULT/DETECTED/RECOVERY/COMPLETE. An ACTIVE row can be past its deadline
+until the next admin operation reconciles it. Effective fault behavior always checks
+the deadline, regardless of the stored fault_enabled flag.
+
+Probe phases are BASELINE/DETECTION/VERIFICATION. Outcomes are HEALTHY, HTTP_503,
+UNEXPECTED_HTTP, TIMEOUT, TRANSPORT_ERROR or INVALID_RESPONSE. Only an actual 503 response
+with the correct controlled-workload body can become HTTP_503. Duration is measured
+with a monotonic clock. observed_at marks the probe's wall-clock start. Target request
+IDs identify actual HTTP responses; transport failures can have no target request ID.
+
+Incident states are DETECTED/ACKNOWLEDGED/INVESTIGATING/MITIGATING/VERIFYING/RESOLVED.
+Each event increments the incident version and records its sequence transactionally.
+Actors identify admin-key, admin-exercise-runner or system roles, not individual people.
+Detection events reference triggering probe IDs and a versioned policy. Recovery events
+reference the attempt and fresh diagnostic/verification probes.
+
+Recovery status is RUNNING/SUCCEEDED/FAILED/INTERRUPTED. action_applied distinguishes
+executing the sandbox action from reverifying a prior action. SUCCEEDED requires
+healthy post-action probes; clearing a flag alone is insufficient.
+
+Unique indexes permit one ACTIVE run per service, one unresolved incident per
+fingerprint, and one RUNNING recovery per incident. Request idempotency is unique
+within a service (run) or incident (recovery); event sequence is unique per incident.

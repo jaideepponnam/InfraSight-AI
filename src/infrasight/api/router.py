@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from infrasight.api import ai, analytics, demo, etl, inventory
+from infrasight.api import ai, analytics, demo, etl, inventory, sre
 from infrasight.api.auth import require_read
 from infrasight.api.schemas import ErrorResponse
 
@@ -15,3 +15,4 @@ router.include_router(inventory.router)
 router.include_router(etl.router)
 
 router.include_router(demo.router)
+router.include_router(sre.router)

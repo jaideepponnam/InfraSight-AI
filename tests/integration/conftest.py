@@ -12,14 +12,37 @@ from sqlalchemy.engine import make_url
 from infrasight.db import models  # noqa: F401
 
 
+def safe_test_database_url():
+    url = os.getenv("TEST_DATABASE_URL")
+    parsed = make_url(url) if url else None
+    if parsed and (
+        parsed.drivername != "postgresql+psycopg"
+        or parsed.host not in {"127.0.0.1", "localhost", "::1"}
+        or set(parsed.query) - {"sslmode"}
+    ):
+        raise RuntimeError(
+            "Integration tests require loopback PostgreSQL; remote databases are forbidden"
+        )
+    return url
+
+
+@pytest.fixture(scope="session", autouse=True)
+def guard_test_database():
+    safe_test_database_url()
+
+
 @contextmanager
 def disposable_database():
-    url = os.getenv("TEST_DATABASE_URL")
+    url = safe_test_database_url()
     if not url:
         pytest.skip("Set TEST_DATABASE_URL to enable disposable PostgreSQL schema tests")
     # Only a newly created, uniquely named database is migrated/dropped by these tests.
     database_name = "infrasight_test_" + uuid4().hex
-    admin = create_engine(url, isolation_level="AUTOCOMMIT", connect_args={"connect_timeout": 3})
+    admin = create_engine(
+        url,
+        isolation_level="AUTOCOMMIT",
+        connect_args={"connect_timeout": 3, "options": "-c timezone=UTC"},
+    )
     engine = None
     created = False
     try:
@@ -27,7 +50,8 @@ def disposable_database():
             connection.execute(text(f'CREATE DATABASE "{database_name}"'))
         created = True
         engine = create_engine(
-            make_url(url).set(database=database_name), connect_args={"connect_timeout": 3}
+            make_url(url).set(database=database_name),
+            connect_args={"connect_timeout": 3, "options": "-c timezone=UTC"},
         )
         config = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
         with engine.begin() as connection:
@@ -173,3 +197,65 @@ def analytics_data(analytics_db):
             )
 
     return Data()
+
+
+@pytest.fixture
+def sre_engine():
+    with disposable_database() as engine:
+        yield engine
+
+
+@pytest.fixture
+def sre_http(sre_engine):
+    import socket
+    import threading
+    import time
+
+    import httpx
+    import uvicorn
+    from pydantic import SecretStr
+
+    from infrasight.config import Settings
+    from infrasight.main import create_app
+
+    read = "sre-integration-read"
+    admin_key = "sre-integration-admin"
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    port = listener.getsockname()[1]
+    settings = Settings(
+        _env_file=None,
+        app_env="test",
+        database_url=sre_engine.url.render_as_string(hide_password=False),
+        api_read_key=SecretStr(read),
+        api_admin_key=SecretStr(admin_key),
+        sre_enabled=True,
+        sre_probe_port=port,
+        sre_cooldown_seconds=0,
+    )
+    app = create_app(settings)
+    server = uvicorn.Server(
+        uvicorn.Config(
+            app,
+            log_config=None,
+            access_log=False,
+            host="127.0.0.1",
+            port=port,
+        )
+    )
+    thread = threading.Thread(target=lambda: server.run(sockets=[listener]), daemon=True)
+    thread.start()
+    try:
+        deadline = time.monotonic() + 10
+        while not server.started and thread.is_alive() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert server.started, "Temporary HTTP server did not start"
+        with httpx.Client(
+            base_url=f"http://127.0.0.1:{port}", trust_env=False, timeout=30
+        ) as client:
+            yield client, settings
+    finally:
+        server.should_exit = True
+        thread.join(timeout=10)
+        listener.close()
+        assert not thread.is_alive(), "Temporary HTTP server did not stop"

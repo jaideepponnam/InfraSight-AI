@@ -58,6 +58,11 @@ def main():
         "Production CORS must allow only the frontend origin",
     )
     require(
+        api_env["SRE_ENABLED"].get("value") == "false",
+        "SRE must remain disabled until a separately approved release",
+    )
+    require("SRE_PROBE_PORT" not in api_env, "Hosted probes must inherit Render PORT")
+    require(
         frontend["runtime"] == "static" and frontend["rootDir"] == "frontend",
         "Expected React static site",
     )

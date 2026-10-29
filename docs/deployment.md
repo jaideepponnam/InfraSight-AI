@@ -1,5 +1,10 @@
 # Public interview deployment
 
+**Feature-branch status:** SRE Milestone 1 adds migration 0003 but remains disabled
+in render.yaml. These release instructions are for a future separately approved
+deployment, not authorization to access production or migrate Neon. For review now,
+use the disposable local procedure in [sre_milestone1.md](sre_milestone1.md).
+
 **Frontend:** https://jaideepponnam.com → Render static site. **API:** https://api.jaideepponnam.com → Render Python web service → Neon PostgreSQL (direct TLS connection) → existing controlled Groq tools. The approved UI, analytics definitions, ETL and AI harness are unchanged. No automatic seeding, continuous worker, or new infrastructure is added.
 
 ## 1. Neon
@@ -61,7 +66,7 @@ $env:DATABASE_URL = [System.Net.NetworkCredential]::new('', $productionDatabase)
 .\.venv\Scripts\python.exe -m alembic check
 ~~~
 
-Expected migration head: **0002**. Do not run tests against Neon: integration tests require CREATEDB and deliberately migrate/drop uniquely named disposable databases.
+Expected migration head for this feature branch: **0003** (baseline: 0002). Do not run tests against Neon: integration tests require CREATEDB and deliberately migrate/drop uniquely named disposable databases.
 
 Use the **existing ETL CLI**, not a second seed system. Ensure these scenario settings match the defaults used by Render in the same temporary terminal:
 
@@ -80,9 +85,9 @@ $env:SIMULATOR_MALFORMED_RATE = "0.01"
 Remove-Item Env:DATABASE_URL
 ~~~
 
-Close that terminal afterward. Six minutes of interval telemetry is modest: 75 servers, at most 900 raw events, intentional rejections, persisted ETL audit counters. Replaying a window is idempotent but adds another audit run/rejection attempt; do not replay unnecessarily. Do not run the broader phase4_demo.py script or the three-cycle demo CLI as a deployment seed. These explicit windows populate the same source ID and time range the frontend already uses.
+Close that terminal afterward. Six minutes of interval telemetry is modest: 75 servers, at most 900 raw events, intentional rejections, persisted ETL audit counters. Replaying a window is idempotent but adds another audit run/rejection attempt; do not replay unnecessarily. Do not run the broader phase4_demo.py script or the three-cycle demo CLI as a deployment seed. These are optional historical examples for simulated-cloud. The current React UI uses the latest successful run and the preceding hour, rather than a fixed snapshot.
 
-Sequence: **fresh DB → migration 0002 → bounded previous/current ETL windows → authenticated analytics verification → frontend available**. Start commands never migrate or seed. LIVE mode remains available but no scheduler is introduced; current wall-clock telemetry will legitimately be STALE until an operator runs an approved bounded current cycle.
+Sequence: **fresh DB → approved migration head → bounded previous/current ETL windows → authenticated analytics verification → frontend available**. Start commands never migrate or seed. LIVE mode remains available but no scheduler is introduced; current wall-clock telemetry will legitimately be STALE until an operator runs an approved bounded current cycle.
 
 ## 5. Render frontend
 
@@ -121,10 +126,10 @@ Cloudflare handles apex CNAME flattening. Replace conflicting A/AAAA/CNAME recor
 ## 7. Verification
 
 - Confirm Render deploy logs are successful and /health returns 200.
-- Confirm https://api.jaideepponnam.com/health/ready returns 200 and Alembic current reports 0002.
+- Confirm https://api.jaideepponnam.com/health/ready returns 200 and Alembic current matches the separately approved release revision.
 - Test an analytics GET with the dedicated read key and the historical source/reference/window; missing key must remain 401.
 - Confirm the browser OPTIONS preflight from https://jaideepponnam.com permits X-API-Key/Content-Type and returns that exact allow-origin. Other origins must not receive permission.
-- Open https://jaideepponnam.com and inspect all three views. Keep SNAPSHOT visible; verify reporting counts, observation-time coverage, cost currency and ETL audit runs from actual data.
+- Open https://jaideepponnam.com and inspect all three views. Confirm the Live reference matches the latest successful ETL run; verify reporting counts, observation-time coverage, cost currency and ETL audit runs from actual data.
 - Do not trigger ETL or submit AI during deployment verification. Existing automated tests fake the provider and prove public-read credentials cannot trigger general admin ETL; the narrow demo endpoint is verified with mocks.
 - Confirm admin/database/provider credentials are absent from the frontend environment/build. Check browser network requests use api.jaideepponnam.com, not a local proxy.
 - Before the interview, warm the free backend by opening /health/ready; a Render Free cold start can take about a minute, longer than the frontend's normal read timeout. Then refresh the app. [Render cold-start behavior](https://render.com/docs/free).
@@ -133,4 +138,4 @@ Cloudflare handles apex CNAME flattening. Replace conflicting A/AAAA/CNAME recor
 
 .github/workflows/ci.yml has two jobs: PostgreSQL 16-backed backend tests (including migration downgrade/re-upgrade in disposable databases), Ruff, Alembic upgrade/check and offline deployment configuration checks; and locked frontend install, tests, typecheck and build. No production or Groq credentials are used. CI does not deploy.
 
-Use Render's manual deploy/redeploy controls after CI passes. Redeploy backend before frontend when API-origin/key configuration changes, then verify both. App rollback does not roll back Neon data. Current migrations are already applied and do not change in this milestone; take a Neon backup/branch before future schema changes and prefer forward fixes. Never downgrade the production schema casually. A static-site rollback may restore an old public demo key, so keep backend/frontend key settings synchronized. The Streamlit fallback remains intact.
+Use Render's manual deploy/redeploy controls after CI passes. Redeploy backend before frontend when API-origin/key configuration changes, then verify both. App rollback does not roll back Neon data. This branch adds the additive SRE migration 0003; take an appropriate Neon backup/branch before any separately approved migration and prefer forward fixes. Keep SRE_ENABLED=false until schema and backend verification are complete. Omit SRE_PROBE_PORT on Render so probes inherit PORT. Never downgrade the production schema casually. A static-site rollback may restore an old public demo key, so keep backend/frontend key settings synchronized. The Streamlit fallback remains intact.

@@ -4,6 +4,15 @@ from infrasight.analytics.services import AnalyticsService
 from infrasight.api.schemas import Envelope
 
 
+def sre_service(request: Request):
+    from infrasight.sre.lifecycle import SREError
+    from infrasight.sre.services import SREService
+
+    if not request.app.state.settings.sre_enabled:
+        raise SREError("SRE_DISABLED", 503)
+    return SREService(request.app.state.engine, request.app.state.settings)
+
+
 def analytics(request: Request):
     return AnalyticsService(request.app.state.engine, request.app.state.settings)
 

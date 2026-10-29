@@ -38,3 +38,27 @@ def test_rejects_unbounded_pool(settings):
 def test_ingestion_configuration_prevents_unbounded_or_stalled_windows(settings, overrides):
     with pytest.raises(ValidationError):
         Settings(_env_file=None, database_url=settings.database_url, **overrides)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"sre_probe_port": 80},
+        {"sre_probe_port": 65536},
+        {"sre_probe_timeout_seconds": 0},
+        {"sre_probe_timeout_seconds": 6},
+        {"sre_run_deadline_seconds": 29},
+        {"sre_run_deadline_seconds": 121},
+        {"sre_cooldown_seconds": -1},
+    ],
+)
+def test_sre_configuration_bounds(settings, overrides):
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, database_url=settings.database_url, **overrides)
+
+
+def test_sre_disabled_by_default_and_inherits_hosted_port(settings, monkeypatch):
+    monkeypatch.setenv("PORT", "12345")
+    configured = Settings(_env_file=None, database_url=settings.database_url)
+    assert configured.sre_enabled is False
+    assert configured.sre_probe_port == 12345

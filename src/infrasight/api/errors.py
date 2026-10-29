@@ -7,6 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException
 
 from infrasight.ai.provider import AIError
+from infrasight.sre.lifecycle import SREError
 
 
 def response(request, status, code, message, details=None):
@@ -22,6 +23,18 @@ def response(request, status, code, message, details=None):
 
 
 def install_handlers(app):
+    @app.exception_handler(SREError)
+    async def sre_error(request: Request, exc):
+        result = response(
+            request,
+            exc.status,
+            exc.code,
+            "The SRE operation could not complete; inspect its audit evidence.",
+        )
+        if exc.status == 429:
+            result.headers["Retry-After"] = "60"
+        return result
+
     @app.exception_handler(AIError)
     async def ai_error(request: Request, exc):
         structlog.get_logger(__name__).warning("ai_request_failed", error_code=exc.code)
