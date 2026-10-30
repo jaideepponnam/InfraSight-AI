@@ -65,10 +65,12 @@ A new exercise can then run.
 
 Prefix: /api/v1/sre. All GETs require X-API-Key. **Every POST requires both X-API-Key
 and X-Admin-Key.** No privileged credential belongs in React, Vite, browser storage or URLs.
-CORS does not permit admin/idempotency headers. For public-frontend hardening,
-the separate simulator ETL demo also requires both read and admin keys. Its browser
-action has been replaced with a read-only explanation and recorded run history;
-SRE exercise endpoints and their authorization remain unchanged.
+CORS does not permit admin/idempotency headers. The separate /api/v1/demo/etl/run
+also requires both read and admin keys. An additional /api/v1/demo/public-etl/run
+supports the Pipeline Run ETL button only when DEMO_PUBLIC_ETL_ENABLED=true
+(default false), using the public read key and fixed simulator bounds. This opt-in
+ETL operation has no cooldown and does not create SRE services or incidents.
+SRE exercise endpoints, deadlines, cooldown and admin authorization are unchanged.
 
 | Method | Path | Contract |
 | --- | --- | --- |

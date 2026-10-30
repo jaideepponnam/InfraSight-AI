@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     ai_max_result_rows: int = Field(default=20, ge=1, le=50)
 
     etl_api_max_window_seconds: int = Field(default=600, ge=90, le=3600)
+    demo_public_etl_enabled: bool = False
 
     # Loopback is the hosted application's own listener, never a client-selected URL.
     sre_enabled: bool = False

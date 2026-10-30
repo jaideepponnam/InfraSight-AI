@@ -420,7 +420,7 @@ export function AIAnalyst({
     </>
   );
 }
-function Pipeline({ runs }: { runs: Run[] }) {
+function Pipeline({ runs, client, onRefresh }: { runs: Run[]; client: APIClient; onRefresh: () => Promise<void> }) {
   const latest = runs[0];
   return (
     <>
@@ -428,7 +428,7 @@ function Pipeline({ runs }: { runs: Run[] }) {
         title="Data Pipeline"
         subtitle="Telemetry ingestion, transformation & analytics readiness"
       />
-      <DemoETLAction />
+      <DemoETLAction client={client} onRefresh={onRefresh} />
       <Tile className="architecture">
         <div className="section-label">BACKEND DATA PATH · ARCHITECTURE</div>
         <div className="pipeline-path">
@@ -664,7 +664,15 @@ export default function App() {
           {!busy && !error && page === "Overview" && data && (
             <OverviewView data={data} regions={regions} context={context} client={client} />
           )}
-          {!busy && !error && page === "Pipeline" && <Pipeline runs={runs} />}
+          {!busy && !error && page === "Pipeline" && <Pipeline runs={runs} client={client} onRefresh={async () => {
+              const id = generation.current;
+              const [history, latest] = await Promise.all([client.runs(context), client.latestSuccessfulRun(context.source_id)]);
+              if (id === generation.current) {
+                setRuns(history.data);
+                setContext(contextForRun(latest));
+                setUpdated(new Date().toISOString());
+              }
+            }} />}
           {page === "AI Analyst" && (
             <AIAnalyst
               key={String(incidentScout) + (route.incidentId ?? "")}

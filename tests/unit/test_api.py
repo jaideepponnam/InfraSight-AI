@@ -115,6 +115,8 @@ def test_openapi_security(api_app):
         post = spec["paths"][path]["post"]
         assert post["security"] == [{"ApplicationKey": [], "AdminKey": []}]
         assert "202" not in post["responses"]
+    public_demo = spec["paths"]["/api/v1/demo/public-etl/run"]["post"]
+    assert public_demo["security"] == [{"ApplicationKey": []}]
     assert "security" not in spec["paths"]["/health"]["get"]
     assert "unit-read-key" not in str(spec)
 

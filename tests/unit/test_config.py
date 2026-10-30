@@ -62,3 +62,20 @@ def test_sre_disabled_by_default_and_inherits_hosted_port(settings, monkeypatch)
     configured = Settings(_env_file=None, database_url=settings.database_url)
     assert configured.sre_enabled is False
     assert configured.sre_probe_port == 12345
+
+
+def test_public_etl_is_disabled_by_default(settings, monkeypatch):
+    monkeypatch.delenv("DEMO_PUBLIC_ETL_ENABLED", raising=False)
+    assert (
+        Settings(_env_file=None, database_url=settings.database_url).demo_public_etl_enabled
+        is False
+    )
+
+
+@pytest.mark.parametrize("value,expected", [("true", True), ("false", False)])
+def test_public_etl_flag_environment_loading(settings, monkeypatch, value, expected):
+    monkeypatch.setenv("DEMO_PUBLIC_ETL_ENABLED", value)
+    assert (
+        Settings(_env_file=None, database_url=settings.database_url).demo_public_etl_enabled
+        is expected
+    )

@@ -43,7 +43,7 @@ frontend port is occupied, run npm.cmd run dev -- --port 5174 instead.
 
 The Live assessment uses the most recently requested successful simulated-cloud
 ETL run's window end as its reference. It remains stable until a newer successful
-run is loaded via navigation or Refresh after an operator completes ingestion. Running and
+run is loaded via navigation, Refresh, or completion of a demo ingestion cycle. Running and
 failed runs do not replace it. The analysis window is the hour preceding that
 reference, with a 20-sample minimum for relevant AI tools. Freshness is evaluated
 at that reference using the existing 120-second threshold. With no successful
@@ -67,12 +67,27 @@ Production uses the configured HTTPS API origin directly. See the
 
 VITE_* values are browser-visible. VITE_API_READ_KEY is an intentional public/demo
 credential. Never include admin, database or provider secrets in frontend settings.
-Both POST /api/v1/etl/run and POST /api/v1/demo/etl/run require read and admin keys.
-The bounded demo endpoint remains available to trusted operators for simulated-cloud
-and a server-selected current window of at most 120 seconds. It rejects client
-parameters and cannot ingest host metrics. Pipeline displays recorded runs and a
-read-only explanation; Refresh checks for new operator-created results. The browser
-has no ETL mutation method or admin credential input.
+Both POST /api/v1/etl/run and POST /api/v1/demo/etl/run still require read and admin
+keys. Pipeline's Run ETL button calls the separate POST /api/v1/demo/public-etl/run
+using only the public read key and an empty JSON object. The backend must explicitly
+enable DEMO_PUBLIC_ETL_ENABLED=true; its default is false. There is no new frontend
+flag or secret. When disabled, a click shows a clear unavailable message.
+
+This opt-in endpoint can write demonstration data for any visitor who has the public
+read key. It permits only simulated-cloud and a server-selected completed window of
+at most 120 seconds; caller-selected sources, windows, simulator settings and URLs
+are rejected. Simulator behavior and record counts are unchanged. No cooldown or
+minimum wait applies: sequential runs are allowed immediately after completion.
+The existing database source lock rejects overlapping runs with 409 SOURCE_BUSY.
+
+The button is disabled only while its request cycle is pending. The panel displays
+actual returned counts, including duplicates and rejected records, and refreshes
+history and the latest successful ingestion reference without losing the result.
+HTTP 200 can contain a FAILED run. A timeout does not prove cancellation; inspect
+history before another click. There is no automatic POST retry. Repeated windows
+can insert no new observations while still creating audit runs. Admin endpoints
+and all SRE mutation authorization remain unchanged; no admin credential enters
+the browser.
 
 The public read key still permits Scout queries. For initial public staging, leave
 GROQ_API_KEY unset on the backend: Analyze reports AI unavailable without contacting
@@ -89,6 +104,7 @@ Consumed endpoints:
 - GET /api/v1/analytics/regions
 - GET /api/v1/analytics/average-health (only when Avg is selected)
 - GET /api/v1/etl/runs (latest history and successful-run reference)
+- POST /api/v1/demo/public-etl/run (explicit Run ETL click; backend opt-in required)
 - POST /api/v1/ai/query (explicit Analyze action)
 
 ## Verification

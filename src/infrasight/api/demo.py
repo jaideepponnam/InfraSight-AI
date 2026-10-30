@@ -32,3 +32,23 @@ def demo_etl(request: Request, body: Annotated[DemoETLRequest | None, Body()] = 
         request,
         OperationsService(request.app.state.engine, request.app.state.settings).demo_trigger(),
     )
+
+
+@router.post(
+    "/public-etl/run",
+    response_model=TriggerEnvelope,
+    response_model_exclude_unset=True,
+    summary="Run the explicitly enabled public simulator demo",
+    description="Requires the read API key and DEMO_PUBLIC_ETL_ENABLED. Only simulated-cloud "
+    "and a server-selected window of at most 120 seconds are permitted. Synchronous result. "
+    "The existing source lock prevents overlapping runs; there is no cooldown.",
+)
+def public_demo_etl(request: Request, body: Annotated[DemoETLRequest | None, Body()] = None):
+    if not request.app.state.settings.demo_public_etl_enabled:
+        raise HTTPException(503, "DEMO_PUBLIC_ETL_DISABLED")
+    if request.query_params:
+        raise HTTPException(422, "DEMO_PARAMETERS_NOT_ALLOWED")
+    return result_response(
+        request,
+        OperationsService(request.app.state.engine, request.app.state.settings).demo_trigger(),
+    )

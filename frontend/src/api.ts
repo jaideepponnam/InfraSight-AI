@@ -2,6 +2,7 @@ import type {
   AIResponse,
   IncidentContext,
   AverageHealth,
+  DemoETLResult,
   Context,
   Envelope,
   Overview,
@@ -16,7 +17,7 @@ export class APIError extends Error {
   constructor(
     public status: number,
     public requestId?: string,
-    public code?: "SRE_DISABLED",
+    public code?: "SRE_DISABLED" | "DEMO_PUBLIC_ETL_DISABLED",
   ) {
     super(
       (
@@ -140,11 +141,13 @@ export class APIClient {
         redirect: "error",
       });
       if (!response.ok) {
-        let code: "SRE_DISABLED" | undefined;
-        if (path.startsWith("sre/") || path === "ai/query") {
+        let code: "SRE_DISABLED" | "DEMO_PUBLIC_ETL_DISABLED" | undefined;
+        if (path.startsWith("sre/") || path === "ai/query" || path === "demo/public-etl/run") {
           try {
             const payload = await response.json();
             if (payload?.error?.code === "SRE_DISABLED") code = "SRE_DISABLED";
+            if (path === "demo/public-etl/run" && payload?.error?.code === "DEMO_PUBLIC_ETL_DISABLED")
+              code = "DEMO_PUBLIC_ETL_DISABLED";
           } catch { /* Keep arbitrary backend error bodies out of the UI. */ }
         }
         throw new APIError(
@@ -227,6 +230,9 @@ export class APIClient {
       "etl/runs?" +
         new URLSearchParams({ source_id: context.source_id, limit: "8" }),
     );
+  }
+  publicDemoETL() {
+    return this.request<Envelope<DemoETLResult>>("demo/public-etl/run", {}, "envelope");
   }
   ask(question: string, context: Context | IncidentContext) {
     return this.request<AIResponse>("ai/query", aiBody(question, context));
