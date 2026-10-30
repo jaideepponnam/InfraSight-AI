@@ -175,7 +175,10 @@ def test_scopes_and_disabled_are_isolated(settings, recorded):
     queries.snapshot.assert_not_called()
 
 
-def test_analytics_round_limit_does_not_limit_incident_investigation(settings, recorded):
+@pytest.mark.parametrize("finish_reason", ["stop", "length", None, "unknown"])
+def test_analytics_round_limit_does_not_limit_incident_investigation(
+    settings, recorded, finish_reason
+):
     _, queries, context = registry(settings, recorded)
     settings.ai_max_analytics_tool_rounds = 1
 
@@ -199,7 +202,7 @@ def test_analytics_round_limit_does_not_limit_incident_investigation(settings, r
                         ]
                     }
                 )
-            return Completion(content="INVENTED unverified recovery")
+            return Completion(content="INVENTED unverified recovery", finish_reason=finish_reason)
 
     provider = MultiRoundProvider()
     response = asyncio.run(
@@ -210,6 +213,7 @@ def test_analytics_round_limit_does_not_limit_incident_investigation(settings, r
     assert provider.requests[-1]["tools"] == []
     assert queries.snapshot.call_count == 3
     assert "INVENTED" not in response.answer
+    assert "Incomplete analysis" not in response.answer
     assert response.evidence.tools_used == ["get_sre_incident_evidence"] * 3
 
 

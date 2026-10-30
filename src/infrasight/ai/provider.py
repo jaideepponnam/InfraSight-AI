@@ -55,6 +55,10 @@ class Completion(BaseModel):
     role: Literal["assistant"] = "assistant"
     content: str | None = Field(default=None, max_length=12000)
     tool_calls: list[ToolCall] = Field(default_factory=list, max_length=3)
+    # Provider metadata must never be replayed as part of an assistant message.
+    finish_reason: Literal["stop", "length", "tool_calls", "function_call", "unknown"] | None = (
+        Field(default=None, exclude=True)
+    )
 
 
 class LLMProvider(Protocol):
@@ -129,7 +133,24 @@ class GroqProvider:
             if len(response.content) > 100000:
                 raise AIError("AI_PROVIDER_INVALID_RESPONSE")
             data = response.json()
-            completion = Completion.model_validate(data["choices"][0]["message"])
+            choice = data["choices"][0]
+            if not isinstance(choice, dict) or not isinstance(choice.get("message"), dict):
+                raise AIError("AI_PROVIDER_INVALID_RESPONSE")
+            raw_reason = choice.get("finish_reason")
+            reason = None
+            if raw_reason is not None:
+                reason = (
+                    raw_reason
+                    if isinstance(raw_reason, str)
+                    and raw_reason in {"stop", "length", "tool_calls", "function_call"}
+                    else "unknown"
+                )
+            completion = Completion.model_validate({**choice["message"], "finish_reason": reason})
+            structlog.get_logger(__name__).info(
+                "ai_provider_completion",
+                request_id=structlog.contextvars.get_contextvars().get("request_id"),
+                finish_reason=completion.finish_reason or "missing",
+            )
             usage = data.get("usage")
             if isinstance(usage, dict):
                 # Never log the usage object or provider messages; allow numeric counters only.

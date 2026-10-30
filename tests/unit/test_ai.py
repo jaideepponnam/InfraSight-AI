@@ -566,6 +566,202 @@ def test_interview_provider_payload_omits_final_tool_schemas(settings, context, 
     assert response.evidence.tool_results[0].result["rows"][0]["stale_servers"] == 75
 
 
+@pytest.mark.parametrize("reason", ["stop", "length", None, "private-unexpected-reason"])
+def test_final_finish_reason_notice_preserves_api_evidence_and_request_budget(
+    settings, context, service, reason
+):
+    settings.ai_max_analytics_tool_rounds = 1
+    settings.api_read_key = SecretStr("scout-test-read")
+    settings.groq_api_key = SecretStr("synthetic-provider-key")
+    captured = []
+    narrative = (
+        "Recorded findings end here" if reason == "length" else "Recorded findings are complete."
+    )
+
+    def respond(request):
+        payload = json.loads(request.content)
+        captured.append(payload)
+        assert payload["max_tokens"] == 800 and payload["model"] == settings.groq_model
+        assert all("finish_reason" not in message for message in payload["messages"])
+        if len(captured) == 1:
+            message = call().model_dump(exclude_none=True)
+            finish = "tool_calls"
+        else:
+            assert len(captured) == 2
+            assert "tools" not in payload
+            message, finish = {"content": narrative}, reason
+        return httpx.Response(
+            200, json={"choices": [{"message": message, "finish_reason": finish}]}
+        )
+
+    provider = GroqProvider(settings, httpx.MockTransport(respond))
+    app = create_app(settings)
+    app.dependency_overrides[harness] = lambda: AnalyticsHarness(provider, service, settings)
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/ai/query",
+            json=context.model_dump(mode="json"),
+            headers={"X-API-Key": "scout-test-read"},
+        )
+    assert response.status_code == 200
+    data = response.json()
+    assert set(data) == {"answer", "evidence", "request_id"}
+    if reason == "length":
+        assert data["answer"].startswith("**Incomplete analysis:**")
+        assert "output limit" in data["answer"] and data["answer"].endswith(narrative)
+    else:
+        assert data["answer"] == narrative
+    assert len(captured) == 2
+    service.overview.assert_called_once()
+    attached = data["evidence"]["tool_results"][0]
+    assert attached["tool"] == "get_overview" and attached["returned_rows"] == 1
+    assert attached["reference_time"] == END.isoformat().replace("+00:00", "Z")
+    expected = service.overview.return_value.model_dump(mode="json")
+    expected.update(row_limit=10, result_may_be_truncated=False)
+    assert attached["result"] == expected
+    assert "private-unexpected-reason" not in response.text
+
+
+def test_final_summary_instructions_prioritize_concise_complete_grounded_analysis(
+    settings, context, service
+):
+    settings.ai_max_analytics_tool_rounds = 1
+    provider = FakeProvider(
+        [call(), Completion(content="A recorded finding.", finish_reason="stop")]
+    )
+    asyncio.run(AnalyticsHarness(provider, service, settings).query(context, "concise"))
+    prompt = provider.requests[-1]["messages"][-1]["content"]
+    for instruction in (
+        "80-100 words of narrative analysis",
+        "complete sentences",
+        "at most three",
+        "verified findings, reference time",
+        "most important next investigation",
+        "fleet_summary totals",
+        "bounded example rows",
+        "missing",
+        "stale or truncated",
+        "coverage and warnings",
+        "regional impact",
+        "available evidence cannot establish",
+    ):
+        assert instruction in prompt
+    assert len(provider.requests) == 2 and provider.requests[-1]["tools"] == []
+
+
+@pytest.mark.parametrize("content", [None, "", "   "])
+def test_length_without_visible_narrative_still_exposes_notice_and_evidence(
+    settings, context, service, content
+):
+    settings.ai_max_analytics_tool_rounds = 1
+    provider = FakeProvider([call(), Completion(content=content, finish_reason="length")])
+    response = asyncio.run(
+        AnalyticsHarness(provider, service, settings).query(context, "empty-text")
+    )
+    assert response.answer.startswith("**Incomplete analysis:**")
+    assert "No narrative analysis was returned" in response.answer
+    assert response.evidence.tool_results[0].result["rows"][0]["stale_servers"] == 75
+    assert len(provider.requests) == 2
+
+
+def test_empty_narrative_without_length_still_fails_closed(settings, context, service):
+    settings.ai_max_analytics_tool_rounds = 1
+    provider = FakeProvider([call(), Completion(content="", finish_reason="stop")])
+    with pytest.raises(AIError, match="AI_PROVIDER_INVALID_RESPONSE"):
+        asyncio.run(AnalyticsHarness(provider, service, settings).query(context, "invalid-text"))
+    assert len(provider.requests) == 2
+
+
+@pytest.mark.parametrize(
+    "reason,expected",
+    [
+        ("stop", "stop"),
+        ("length", "length"),
+        ("tool_calls", "tool_calls"),
+        ("function_call", "function_call"),
+        (None, None),
+        ("private-unexpected-reason", "unknown"),
+        ("length\nprivate-injection", "unknown"),
+        ({"private-reason": "length"}, "unknown"),
+        (["length"], "unknown"),
+        (True, "unknown"),
+        (123, "unknown"),
+    ],
+)
+def test_provider_finish_reason_is_allowlisted_and_never_replayed(settings, reason, expected):
+    import structlog
+    from structlog.testing import capture_logs
+
+    settings.groq_api_key = SecretStr("private-provider-key")
+    choice = {
+        "message": {
+            "content": "private-answer",
+            "reasoning": "private-reasoning",
+            "finish_reason": "length",
+        },
+        "finish_reason": reason,
+    }
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json={"choices": [choice]}))
+    with (
+        structlog.contextvars.bound_contextvars(request_id="finish-test"),
+        capture_logs() as events,
+    ):
+        completion = asyncio.run(
+            GroqProvider(settings, transport).complete(
+                [{"role": "user", "content": "private-prompt"}], [], "none"
+            )
+        )
+    assert completion.finish_reason == expected
+    assert completion.content == "private-answer"
+    assert "finish_reason" not in completion.model_dump(exclude_none=True)
+    assert events == [
+        {
+            "event": "ai_provider_completion",
+            "log_level": "info",
+            "request_id": "finish-test",
+            "finish_reason": expected or "missing",
+        }
+    ]
+    assert "private" not in json.dumps(events)
+
+
+def test_missing_finish_reason_is_backward_compatible(settings):
+    settings.groq_api_key = SecretStr("synthetic-test-key")
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200, json={"choices": [{"message": {"content": "Recorded findings."}}]}
+        )
+    )
+    completion = asyncio.run(GroqProvider(settings, transport).complete([], [], "none"))
+    assert completion.content == "Recorded findings." and completion.finish_reason is None
+
+
+@pytest.mark.parametrize("choice", [None, [], "private-choice", {"message": None}])
+def test_malformed_choice_still_fails_without_sensitive_completion_logs(settings, choice):
+    from structlog.testing import capture_logs
+
+    settings.groq_api_key = SecretStr("synthetic-test-key")
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json={"choices": [choice]}))
+    with capture_logs() as events, pytest.raises(AIError, match="AI_PROVIDER_INVALID_RESPONSE"):
+        asyncio.run(GroqProvider(settings, transport).complete([], [], "none"))
+    assert events == []
+
+
+def test_length_on_tool_selection_does_not_mark_a_completed_final_answer(
+    settings, context, service
+):
+    settings.ai_max_analytics_tool_rounds = 1
+    tool_call = call()
+    tool_call.finish_reason = "length"
+    provider = FakeProvider(
+        [tool_call, Completion(content="Recorded finding.", finish_reason="stop")]
+    )
+    response = asyncio.run(AnalyticsHarness(provider, service, settings).query(context, "tool"))
+    assert response.answer == "Recorded finding."
+    assert len(provider.requests) == 2
+    assert "finish_reason" not in provider.requests[-1]["messages"][2]
+
+
 def test_compact_schemas_omit_only_frozen_context(settings, context, service):
     context.min_samples = 20
     registry = ToolRegistry(service, settings, context)
@@ -624,8 +820,9 @@ def test_interview_empty_evidence_is_explicitly_insufficient(settings, context, 
     assert len(provider.requests) == 2
 
 
+@pytest.mark.parametrize("finish_reason", ["stop", "length", None])
 def test_interview_preserves_full_totals_staleness_warnings_and_truncation(
-    settings, context, service
+    settings, context, service, finish_reason
 ):
     settings.ai_max_analytics_tool_rounds = 1
     settings.ai_max_result_rows = 2
@@ -666,13 +863,17 @@ def test_interview_preserves_full_totals_staleness_warnings_and_truncation(
         reference_time=END, parameters={"freshness_seconds": 120}, rows=[totals]
     )
     provider = FakeProvider(
-        [call("get_server_health"), Completion(content="Recorded fleet counts.")]
+        [
+            call("get_server_health"),
+            Completion(content="Recorded fleet counts.", finish_reason=finish_reason),
+        ]
     )
     response = asyncio.run(AnalyticsHarness(provider, service, settings).query(context, "totals"))
     result = response.evidence.tool_results[0].result
     assert result["rows"] == rows and result["fleet_summary"] == totals
     assert result["result_may_be_truncated"] is True and result["row_limit"] == 2
     assert "Detail rows may be truncated" in response.answer
+    assert response.answer.startswith("**Incomplete analysis:**") is (finish_reason == "length")
     wire = json.loads(
         next(
             message["content"]
@@ -749,12 +950,19 @@ def test_provider_usage_logs_only_bounded_integer_counters(settings, usage, expe
             )
         )
     assert completion.content == "private-answer"
+    expected_events = [
+        {
+            "event": "ai_provider_completion",
+            "log_level": "info",
+            "request_id": None,
+            "finish_reason": "missing",
+        }
+    ]
     if expected:
-        assert events == [
+        expected_events.append(
             {"event": "ai_provider_usage", "log_level": "info", "request_id": None, **expected}
-        ]
-    else:
-        assert events == []
+        )
+    assert events == expected_events
     assert "private" not in json.dumps(events)
 
 
