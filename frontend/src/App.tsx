@@ -22,6 +22,9 @@ import { DemoETLAction } from "./DemoETLAction";
 import { DatabaseSample } from "./DatabaseSample";
 import { AnalystAnswer } from "./AnalystAnswer";
 import { CoverageEvidence } from "./CoverageEvidence";
+import { LiveOperations } from "./sre/LiveOperations";
+import { IncidentCenter } from "./sre/IncidentCenter";
+import { IncidentDetails } from "./sre/IncidentDetails";
 import { date, money, numeric, percent, telemetryState } from "./format";
 import type { AIResponse, Context, Overview, Region, Run } from "./types";
 
@@ -33,6 +36,18 @@ export const SUGGESTIONS = [
   "Did infrastructure cost increase versus the previous period?",
 ];
 type Page = HeaderPage;
+type AppRoute = { page: Page; incidentId?: string };
+const pageHashes: Record<Page, string> = {
+  "Overview": "#/overview", "Live Operations": "#/operations", "Incident Center": "#/incidents",
+  "AI Analyst": "#/scout", "Pipeline": "#/pipeline",
+};
+function currentRoute(): AppRoute {
+  const hash = window.location.hash;
+  const detail = /^#\/incidents\/([^/]+)$/.exec(hash);
+  if (detail) return { page: "Incident Center", incidentId: detail[1] };
+  const page = (Object.keys(pageHashes) as Page[]).find(value => pageHashes[value] === hash);
+  return { page: page ?? "Overview" };
+}
 function Notice({ error }: { error: APIError }) {
   return (
     <InlineNotification
@@ -515,7 +530,10 @@ function Pipeline({ runs, client, onRefresh }: { runs: Run[]; client: APIClient;
 }
 export default function App() {
   const [client] = useState(() => new APIClient());
-  const [page, setPage] = useState<Page>("Overview");
+  const [route, setRoute] = useState<AppRoute>(currentRoute);
+  const page = route.page;
+  const srePage = page === "Live Operations" || page === "Incident Center";
+  const [sreBusy, setSREBusy] = useState(false);
   const [context, setContext] = useState(live);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [data, setData] = useState<Overview | null>(null);
@@ -525,6 +543,21 @@ export default function App() {
   const [error, setError] = useState<APIError | null>(null);
   const [updated, setUpdated] = useState<string | null>(null);
   const generation = useRef(0);
+  function navigate(next: Page, incidentId?: string) {
+    const hash = incidentId ? "#/incidents/" + encodeURIComponent(incidentId) : pageHashes[next];
+    if (window.location.hash !== hash) window.history.pushState(null, "", hash);
+    setRoute({ page: next, incidentId });
+    setRefreshVersion(value => value + 1);
+  }
+  useEffect(() => {
+    const update = () => setRoute(currentRoute());
+    window.addEventListener("hashchange", update);
+    window.addEventListener("popstate", update);
+    return () => { window.removeEventListener("hashchange", update); window.removeEventListener("popstate", update); };
+  }, []);
+  useEffect(() => {
+    document.querySelector<HTMLElement>(".sre-page-heading h1")?.focus();
+  }, [route.page, route.incidentId]);
   useEffect(() => {
     const id = ++generation.current;
     setBusy(true);
@@ -532,6 +565,10 @@ export default function App() {
     setData(null);
     setRegions([]);
     setRuns([]);
+    if (srePage) {
+      setBusy(false);
+      return () => { generation.current++; };
+    }
     const task = (async () => {
       const latest = await client.latestSuccessfulRun("simulated-cloud");
       const selected = contextForRun(latest);
@@ -569,19 +606,23 @@ export default function App() {
   return (
     <div className="app-shell">
       <AppHeader
-        page={page} referenceTime={context.reference_time} busy={busy}
-        onNavigate={next => { setPage(next); setRefreshVersion(v => v + 1); }}
+        page={page} referenceTime={context.reference_time} busy={srePage ? sreBusy : busy}
+        onNavigate={next => navigate(next)}
         onRefresh={() => setRefreshVersion(v => v + 1)}
       />
       <main>
         <div className="workspace">
-          {error && <Notice error={error} />}{" "}
-          {busy && (
+          {!srePage && error && <Notice error={error} />}{" "}
+          {!srePage && busy && (
             <div className="loading-panel">
               <InlineLoading description="Loading infrastructure analytics…" />
               <SkeletonText paragraph lineCount={5} />
             </div>
           )}
+          {page === "Live Operations" && <LiveOperations client={client} refresh={refreshVersion} onRefresh={() => setRefreshVersion(value => value + 1)} onSelect={id => navigate("Incident Center", id)} onBusy={setSREBusy} />}
+          {page === "Incident Center" && (route.incidentId
+            ? <IncidentDetails key={route.incidentId} id={route.incidentId} client={client} refresh={refreshVersion} onRefresh={() => setRefreshVersion(value => value + 1)} onBack={() => navigate("Incident Center")} onBusy={setSREBusy} />
+            : <IncidentCenter client={client} refresh={refreshVersion} onRefresh={() => setRefreshVersion(value => value + 1)} onSelect={id => navigate("Incident Center", id)} onBusy={setSREBusy} />)}
           {!busy && !error && page === "Overview" && data && (
             <OverviewView data={data} regions={regions} context={context} client={client} />
           )}
@@ -598,7 +639,7 @@ export default function App() {
               contextLoading={busy}
             />
           )}
-          {data && page !== "AI Analyst" && (
+          {!srePage && data && page !== "AI Analyst" && (
             <div className="workspace-footer">
               <span>
                 Telemetry: {date(data.latest_telemetry_timestamp)} ·{" "}

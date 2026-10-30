@@ -8,7 +8,7 @@ import { APIClient } from "../api";
 beforeEach(() => vi.spyOn(APIClient.prototype, "latestSuccessfulRun").mockResolvedValue(null));
 afterEach(() => vi.restoreAllMocks());
 
-it("shows three top-level destinations and organized Live date/time without old controls", async () => {
+it("preserves legacy destinations and their reference date/time alongside SRE navigation", async () => {
   const navigate = vi.fn(); const refresh = vi.fn();
   render(<AppHeader page="Overview" referenceTime="2026-10-12T09:37:52Z" busy={false} onNavigate={navigate} onRefresh={refresh} />);
   expect(screen.getByText("LIVE")).toBeInTheDocument();

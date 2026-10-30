@@ -8,12 +8,15 @@ import type {
   Region,
   Run,
 } from "./types";
+import { arrayOf, checked as validateSRE, isEvidence, isEvent, isIncident, isRun, isService, isUUID } from "./sre/contracts";
+import type { IncidentState, SREEnvelope } from "./sre/types";
 export const RATE_LIMIT_MESSAGE =
   "AI analysis is temporarily rate limited. Existing infrastructure analytics remain available. Please retry shortly.";
 export class APIError extends Error {
   constructor(
     public status: number,
     public requestId?: string,
+    public code?: "SRE_DISABLED",
   ) {
     super(
       (
@@ -29,6 +32,14 @@ export class APIError extends Error {
       )[status] || "The request could not complete. Please retry when ready.",
     );
   }
+}
+function checked<T>(value: unknown, validate: (v: unknown) => v is T): SREEnvelope<T> {
+  try { return validateSRE(value, validate); }
+  catch { throw new APIError(502); }
+}
+function resourceId(id: string): string {
+  if (!isUUID(id)) throw new APIError(422);
+  return encodeURIComponent(id.toLowerCase());
 }
 export function snapshot(): Context {
   return {
@@ -118,11 +129,20 @@ export class APIClient {
         credentials: "omit",
         redirect: "error",
       });
-      if (!response.ok)
+      if (!response.ok) {
+        let code: "SRE_DISABLED" | undefined;
+        if (path.startsWith("sre/")) {
+          try {
+            const payload = await response.json();
+            if (payload?.error?.code === "SRE_DISABLED") code = "SRE_DISABLED";
+          } catch { /* Keep arbitrary backend error bodies out of the UI. */ }
+        }
         throw new APIError(
           response.status,
           response.headers.get("X-Request-ID") || undefined,
+          code,
         );
+      }
       const data: unknown = await response.json();
       if (
         !data ||
@@ -146,6 +166,37 @@ export class APIClient {
   }
   averageHealth(context: Context) {
     return this.request<Envelope<AverageHealth[]>>("analytics/average-health?" + query(context));
+  }
+  // SRE is read-only in the browser. No admin header, token or mutation method.
+  async sreServices() {
+    return checked(await this.request<unknown>("sre/services"), arrayOf(isService));
+  }
+  async sreIncidents(params: { state?: IncidentState; limit?: number; offset?: number } = {}) {
+    const query = new URLSearchParams({ limit: String(params.limit ?? 20), offset: String(params.offset ?? 0) });
+    if (params.state) query.set("state", params.state);
+    const result = checked(await this.request<unknown>("sre/incidents?" + query), arrayOf(isIncident));
+    if (result.meta.total == null || result.meta.limit == null || result.meta.offset == null) throw new APIError(502);
+    return result;
+  }
+  async sreIncident(id: string) {
+    const result = checked(await this.request<unknown>("sre/incidents/" + resourceId(id)), isIncident);
+    if (result.data.id !== id.toLowerCase()) throw new APIError(502);
+    return result;
+  }
+  async sreEvents(id: string) {
+    const result = checked(await this.request<unknown>("sre/incidents/" + resourceId(id) + "/events"), arrayOf(isEvent));
+    if (result.data.some(event => event.incident_id !== id.toLowerCase())) throw new APIError(502);
+    return result;
+  }
+  async sreEvidence(id: string) {
+    const result = checked(await this.request<unknown>("sre/incidents/" + resourceId(id) + "/evidence"), isEvidence);
+    if (result.data.recovery_attempts.some(attempt => attempt.incident_id !== id.toLowerCase())) throw new APIError(502);
+    return result;
+  }
+  async sreRun(id: string) {
+    const result = checked(await this.request<unknown>("sre/demo-runs/" + resourceId(id)), isRun);
+    if (result.data.id !== id.toLowerCase()) throw new APIError(502);
+    return result;
   }
   overview(context: Context) {
     return this.request<Envelope<Overview>>(

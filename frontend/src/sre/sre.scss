@@ -1,0 +1,100 @@
+@use "@carbon/styles/scss/spacing" as space;
+
+.sre-workspace {
+  color: var(--cds-text-primary);
+  min-width: 0;
+  .sre-page-heading {margin-bottom: space.$spacing-06;}
+  .sre-page-heading h1:focus {outline: none;}
+  .sre-page-heading p {max-width: 74ch;}
+  h2 {font-size: 1.25rem; font-weight: 400; line-height: 1.4;}
+  h3 {font-size: 1rem; font-weight: 500; line-height: 1.5;}
+  p {line-height: 1.6;}
+  code {font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.75rem; overflow-wrap: anywhere;}
+  pre {white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; font-size: 0.75rem; padding: space.$spacing-05; max-height: 32rem; overflow-y: auto; background: var(--cds-background);}
+  .sre-panel {padding: space.$spacing-06; margin-top: space.$spacing-06;}
+  .panel-title {gap: space.$spacing-04; align-items: flex-start; margin-bottom: space.$spacing-05;}
+  .cds--tag {flex-shrink: 0;}
+  .cds--inline-notification {max-width: none;}
+}
+.sre-boundary {display: flex; align-items: flex-start; gap: space.$spacing-05; padding: space.$spacing-05; border-left: 3px solid var(--cds-border-interactive, #0f62fe); background: var(--cds-layer-01); margin-bottom: space.$spacing-06;}
+.sre-boundary .cds--tag {margin: 0; white-space: nowrap;}
+.sre-boundary p, .sre-retrieved {font-size: 0.8125rem; color: var(--cds-text-secondary);}
+.sre-metrics {display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: space.$spacing-05; margin-bottom: space.$spacing-07;}
+.sre-metrics .cds--tile {display: flex; flex-direction: column; gap: space.$spacing-04; padding: space.$spacing-06; background: var(--cds-background);}
+.sre-metrics strong {font-size: 2.25rem; font-weight: 300; line-height: 1.2; overflow-wrap: anywhere;}
+.sre-metrics small {color: var(--cds-text-secondary); line-height: 1.5;}
+.sre-service-grid {display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 27rem), 1fr)); gap: space.$spacing-05;}
+.sre-service {padding: space.$spacing-06; border-top: 3px solid var(--cds-border-strong); min-width: 0;}
+.sre-service h2 {overflow-wrap: anywhere;}
+.sre-state-healthy {border-top-color: var(--cds-support-success);}
+.sre-state-degraded {border-top-color: var(--cds-support-error);}
+.sre-assessment {margin: space.$spacing-06 0; max-width: 78ch;}
+.sre-facts {margin: space.$spacing-05 0 space.$spacing-06;}
+.sre-facts > div {padding: space.$spacing-04 0; border-top: 1px solid var(--cds-border-subtle); display: grid; grid-template-columns: minmax(8rem, 1fr) minmax(0, 1.5fr); gap: space.$spacing-05; line-height: 1.5;}
+.sre-facts dt {font-size: 0.8125rem; color: var(--cds-text-secondary);}
+.sre-facts dd {margin: 0; font-size: 0.875rem; min-width: 0; overflow-wrap: anywhere;}
+.sre-list-toolbar {display: flex; align-items: flex-end; gap: space.$spacing-06; margin: space.$spacing-06 0;}
+.sre-list-toolbar .cds--form-item {max-width: 16rem; min-width: 12rem;}
+.sre-list-toolbar p {font-size: 0.8125rem; padding-bottom: space.$spacing-03;}
+.sre-table-scroll {max-width: 100%; overscroll-behavior-x: contain;}
+.sre-workspace .cds--data-table {min-width: 48rem; font-size: 0.875rem; white-space: normal; background: var(--cds-background);}
+.sre-workspace .cds--data-table th, .sre-workspace .cds--data-table td {text-align: left; vertical-align: top; line-height: 1.5; padding: space.$spacing-05;}
+.sre-workspace .cds--data-table td {background: var(--cds-background);}
+.sre-workspace .sre-incident-link {height: auto; min-height: 0; padding: 0; text-align: left; max-width: none; line-height: 1.5; overflow-wrap: anywhere;}
+.sre-record-id {display: block; color: var(--cds-text-secondary); margin-top: space.$spacing-03;}
+.sre-severity {font-family: ui-monospace, monospace; font-size: 0.8125rem; font-weight: 600;}
+.sre-pagination {display: flex; align-items: center; justify-content: space-between; gap: space.$spacing-05; margin: space.$spacing-05 0;}
+.sre-pagination > div {display: flex;}
+.sre-retrieved {margin-top: space.$spacing-06;}
+.sre-empty {padding: space.$spacing-07 space.$spacing-06; border: 1px dashed var(--cds-border-strong);}
+.sre-empty p {margin-top: space.$spacing-04; max-width: 70ch; color: var(--cds-text-secondary);}
+.sre-problem {margin: space.$spacing-05 0;}
+.sre-problem > p, .sre-problem > button {margin-top: space.$spacing-04;}
+.sre-header-context {font-size: 0.75rem; color: var(--cds-text-secondary);}
+.sre-incident-summary {padding: space.$spacing-06; margin-bottom: space.$spacing-06;}
+.sre-incident-title {display: flex; align-items: flex-start; justify-content: space-between; gap: space.$spacing-06;}
+.sre-incident-title h2 {margin-top: space.$spacing-04; max-width: 60ch;}
+.sre-metadata {display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: space.$spacing-07; margin-bottom: 0;}
+.sre-detail-grid {display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: space.$spacing-05;}
+.sre-workspace .sre-detail-grid .sre-panel {margin-top: 0;}
+.sre-space {margin-top: space.$spacing-05;}
+.sre-probe-sequence {display: flex; gap: space.$spacing-03; flex-wrap: wrap; list-style: none; margin: space.$spacing-06 0; padding: 0;}
+.sre-probe-sequence li {display: flex; flex-direction: column; padding: space.$spacing-04 space.$spacing-05; background: var(--cds-background); border: 1px solid var(--cds-border-subtle); border-top: 3px solid var(--cds-border-strong); gap: space.$spacing-02;}
+.sre-probe-sequence b {font-family: ui-monospace, monospace; font-size: 1.125rem;}
+.sre-probe-sequence small, .sre-probe-sequence span {font-size: 0.6875rem; color: var(--cds-text-secondary);}
+.sre-probe-sequence .sre-probe-ok {border-top-color: var(--cds-support-success);}
+.sre-probe-sequence .sre-probe-error {border-top-color: var(--cds-support-error);}
+.sre-attempts article + article {margin-top: space.$spacing-06; border-top: 1px solid var(--cds-border-strong); padding-top: space.$spacing-05;}
+.sre-expired {border-left: 3px solid var(--cds-support-warning); padding-left: space.$spacing-05; margin-top: space.$spacing-05;}
+.sre-raw-evidence {margin-top: space.$spacing-06;}
+.sre-timeline {list-style: none; padding: 0; margin: 0;}
+.sre-timeline > li {display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: space.$spacing-05;}
+.sre-timeline-marker {width: 2rem; height: 2rem; display: grid; place-items: center; border: 1px solid var(--cds-border-strong); background: var(--cds-background); font-size: 0.75rem;}
+.sre-timeline-entry {padding-bottom: space.$spacing-07; min-width: 0;}
+.sre-timeline-entry > p {font-size: 0.8125rem; color: var(--cds-text-secondary); margin-bottom: space.$spacing-04;}
+.sre-timeline-entry time {font-size: 0.75rem; color: var(--cds-text-secondary);}
+.app-header .top-navigation {min-width: 0; overflow-x: auto;}
+@media (max-width: 1200px) {
+  .sre-metrics {grid-template-columns: repeat(2, minmax(0, 1fr));}
+  .app-header {display: grid; grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "brand context refresh" "nav nav nav"; padding: space.$spacing-04 space.$spacing-05; gap: space.$spacing-03 space.$spacing-05;}
+  .app-header .brand {grid-area: brand; border-right: 0;}
+  .app-header .header-context {grid-area: context; padding: 0;}
+  .app-header .header-refresh {grid-area: refresh;}
+  .app-header .top-navigation {grid-area: nav; display: flex; width: 100%; gap: 0; margin: 0; flex-wrap: nowrap;}
+  .app-header .top-navigation button {flex: 0 0 auto; min-height: 44px; padding: space.$spacing-04 space.$spacing-05;}
+}
+@media (max-width: 672px) {
+  .app-header {grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "brand refresh" "nav nav" "context context";}
+  .sre-boundary {flex-direction: column; gap: space.$spacing-04;}
+  .sre-metrics, .sre-detail-grid, .sre-metadata {grid-template-columns: minmax(0, 1fr);}
+  .sre-metrics {gap: space.$spacing-03; margin-bottom: space.$spacing-06;}
+  .sre-metrics .cds--tile {padding: space.$spacing-05;}
+  .sre-metrics strong {font-size: 1.75rem;}
+  .sre-workspace .sre-panel, .sre-service, .sre-incident-summary {padding: space.$spacing-05;}
+  .sre-list-toolbar {align-items: stretch; flex-direction: column; gap: space.$spacing-04;}
+  .sre-list-toolbar .cds--form-item {max-width: none;}
+  .sre-incident-title {flex-direction: column;}
+  .sre-facts > div {grid-template-columns: minmax(0, 1fr); gap: space.$spacing-02;}
+  .sre-pagination {flex-wrap: wrap;}
+  .sre-timeline > li {gap: space.$spacing-03;}
+}

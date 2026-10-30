@@ -1,7 +1,21 @@
 # InfraSight AI interview frontend
 
-React, TypeScript, Vite and IBM Carbon. Three views: Overview, Scout, Pipeline.
+React, TypeScript, Vite and IBM Carbon. Overview, Scout and Pipeline are preserved.
+Milestone 2 adds Live Operations, Incident Center and nested Incident Details.
 The Streamlit dashboard remains an independent fallback.
+
+## SRE operations workspace
+
+The new SRE pages consume only the Milestone 1 GET APIs. They show real service,
+incident, HTTP evidence, timeline and recovery records. Health is unknown without
+supporting evidence and becomes stale as observations age; a resolved incident
+does not imply current healthy operation. Refresh reads stored records without
+starting probes. No SRE mutation controls or admin credentials are included.
+
+See [the SRE Dashboard runbook](../docs/sre_dashboard.md) for data sources, status
+rules, backend limitations, tests and local review. Direct links use #/operations,
+#/incidents and #/incidents/{UUID}. SRE_ENABLED remains disabled by default on the
+backend; this frontend does not enable it or create demonstration records.
 
 ## Run locally
 
