@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     groq_timeout_seconds: float = Field(default=20, ge=1, le=60)
     ai_request_timeout_seconds: float = Field(default=60, ge=1, le=120)
     ai_max_result_rows: int = Field(default=20, ge=1, le=50)
+    ai_max_analytics_tool_rounds: int = Field(default=3, ge=1, le=3)
 
     etl_api_max_window_seconds: int = Field(default=600, ge=90, le=3600)
     demo_public_etl_enabled: bool = False

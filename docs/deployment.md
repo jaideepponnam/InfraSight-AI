@@ -24,6 +24,8 @@ Set these in Render's backend environment, never in source control:
 | API_ADMIN_KEY | Different confidential admin credential; never sent to the frontend |
 | GROQ_API_KEY | Optional confidential provider credential; server-side only; omit for initial public staging |
 | GROQ_MODEL | Existing supported model; blueprint supplies openai/gpt-oss-120b |
+| AI_MAX_ANALYTICS_TOOL_ROUNDS | 3 by default (valid 1-3); interview staging may use 1 for at most two Groq requests per analytics question |
+| AI_MAX_RESULT_ROWS | 20 by default; optional interview staging value 5 bounds detail lists while preserving complete fleet totals |
 | APP_ENV | production |
 | CORS_ALLOWED_ORIGINS | JSON array: ["https://jaideepponnam.com"] |
 | DB_POOL_SIZE / DB_MAX_OVERFLOW | 2 / 2 |
@@ -33,7 +35,17 @@ Set these in Render's backend environment, never in source control:
 | DEMO_PUBLIC_ETL_ENABLED | false by default; enable only on isolated staging to deliberately allow public simulator ETL |
 | UV_VERSION | 0.13.0 (blueprint pins the package manager) |
 
-Existing ETL defaults remain: 75 servers, seed 7, 30-second intervals, 1% malformed events. Existing AI limits remain unchanged. Generate distinct high-entropy read and admin keys through a password manager; the application rejects identical configured keys. A missing read/admin key continues to fail closed on its endpoints. An unconfigured Groq provider cannot produce AI answers.
+Existing ETL defaults remain: 75 servers, seed 7, 30-second intervals, 1% malformed events. Existing AI limit defaults remain unchanged. Generate distinct high-entropy read and admin keys through a password manager; the application rejects identical configured keys. A missing read/admin key continues to fail closed on its endpoints. An unconfigured Groq provider cannot produce AI answers.
+
+The analytics round budget reserves a schema-free final summary after the allowed tool
+rounds. Its default preserves up to four provider requests. A value of 1 permits at most
+two and does not alter incident investigation rounds, tool authorization or public evidence.
+Neither setting changes the model or API key. Numeric token-usage logging is available
+when Groq supplies counters, without logging prompts or payloads. No automatic retries,
+ETL cooldown, schema migration or new infrastructure is introduced. These settings must
+be applied separately after approval; this code change does not modify Render or Neon.
+Mocked tests do not prove live provider reliability, and shared/public quota use can still
+produce 429 responses. See [the interview budget](phase6_demo.md#interview-token-budget).
 
 ## 3. Render backend
 

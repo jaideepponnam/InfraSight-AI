@@ -505,6 +505,259 @@ def test_provider_result_keeps_small_or_nonuniform_rows(rows):
     assert provider_result(result) is result
 
 
+@pytest.mark.parametrize("rounds", [1, 2, 3])
+def test_configured_analytics_rounds_reserve_schema_free_summary(
+    settings, context, service, rounds
+):
+    settings.ai_max_analytics_tool_rounds = rounds
+    provider = FakeProvider(
+        [call(identity=f"call-{index}") for index in range(rounds)]
+        + [Completion(content="Only the recorded fleet evidence is available.")]
+    )
+    response = asyncio.run(AnalyticsHarness(provider, service, settings).query(context, "budget"))
+    assert len(provider.requests) == rounds + 1
+    assert service.overview.call_count == rounds
+    assert len(response.evidence.tool_results) == rounds
+    assert provider.requests[0]["choice"] == "required"
+    assert all(request["tools"] for request in provider.requests[:-1])
+    assert {tool["function"]["name"] for tool in provider.requests[0]["tools"]} == set(TOOLS)
+    final = provider.requests[-1]
+    assert final["tools"] == [] and final["choice"] == "none"
+    assert final["messages"][-1]["role"] == "system"
+    assert "available evidence cannot establish" in final["messages"][-1]["content"]
+
+
+def test_interview_budget_rejects_further_tools_without_executing_them(settings, context, service):
+    settings.ai_max_analytics_tool_rounds = 1
+    provider = FakeProvider([call(), call("get_critical_servers", identity="call-2")])
+    with pytest.raises(AIError, match="AI_TOOL_ROUND_LIMIT"):
+        asyncio.run(AnalyticsHarness(provider, service, settings).query(context, "budget"))
+    assert len(provider.requests) == 2
+    service.overview.assert_called_once()
+    service.critical_servers.assert_not_called()
+
+
+def test_interview_provider_payload_omits_final_tool_schemas(settings, context, service):
+    settings.ai_max_analytics_tool_rounds = 1
+    settings.groq_api_key = SecretStr("synthetic-test-key")
+    captured = []
+
+    def respond(request):
+        payload = json.loads(request.content)
+        captured.append(payload)
+        assert payload["model"] == settings.groq_model
+        assert payload["max_tokens"] == 800
+        if len(captured) == 1:
+            assert payload["tool_choice"] == "required"
+            message = call().model_dump(exclude_none=True)
+        else:
+            assert len(captured) == 2
+            assert "tools" not in payload and "tool_choice" not in payload
+            assert "parallel_tool_calls" not in payload
+            message = {"content": "The recorded fleet is stale; no live probe was run."}
+        return httpx.Response(200, json={"choices": [{"message": message}]})
+
+    response = asyncio.run(
+        AnalyticsHarness(
+            GroqProvider(settings, httpx.MockTransport(respond)), service, settings
+        ).query(context, "interview")
+    )
+    assert len(captured) == 2
+    assert response.evidence.tool_results[0].result["rows"][0]["stale_servers"] == 75
+
+
+def test_compact_schemas_omit_only_frozen_context(settings, context, service):
+    context.min_samples = 20
+    registry = ToolRegistry(service, settings, context)
+    schemas = registry.schemas()
+    assert {tool["function"]["name"] for tool in schemas} == set(TOOLS)
+    for tool in schemas:
+        schema = tool["function"]["parameters"]
+        assert not {
+            "as_of",
+            "source_id",
+            "currency",
+            "freshness_seconds",
+            "start",
+            "end",
+            "min_samples",
+        } & set(schema["properties"])
+        assert set(schema.get("required", [])) <= set(schema["properties"])
+    comparison = next(tool for tool in schemas if tool["function"]["name"] == "compare_cost")
+    assert not {"mode", "current_start", "current_end", "previous_start", "previous_end"} & set(
+        comparison["function"]["parameters"]["properties"]
+    )
+    registry.execute("get_cpu_pressure", "{}")
+    query = service.sustained_cpu_pressure.call_args.args[0]
+    assert query.start == context.start and query.end == context.end
+    assert query.as_of == context.reference_time and query.source_id == context.source_id
+    assert query.min_samples == 20
+
+
+def test_schemas_keep_unfixed_window_and_sample_arguments(settings, service):
+    context = QueryRequest(question="Investigate CPU pressure", reference_time=END)
+    schemas = ToolRegistry(service, settings, context).schemas()
+    pressure = next(tool for tool in schemas if tool["function"]["name"] == "get_cpu_pressure")
+    assert {"start", "end", "min_samples"} <= set(pressure["function"]["parameters"]["properties"])
+    comparison = next(tool for tool in schemas if tool["function"]["name"] == "compare_cost")
+    assert "mode" in comparison["function"]["parameters"]["properties"]
+
+
+def test_interview_empty_evidence_is_explicitly_insufficient(settings, context, service):
+    settings.ai_max_analytics_tool_rounds = 1
+    service.critical_servers.return_value = AnalyticsReport(
+        reference_time=END,
+        parameters={"freshness_seconds": 120},
+        rows=[],
+        warnings=["No additional measurements were retrieved."],
+    )
+    provider = FakeProvider(
+        [call("get_critical_servers"), Completion(content="Invented: every server is healthy.")]
+    )
+    response = asyncio.run(AnalyticsHarness(provider, service, settings).query(context, "empty"))
+    assert "insufficient" in response.answer
+    assert "Invented" not in response.answer
+    assert response.evidence.tool_results[0].result["rows"] == []
+    assert response.evidence.tool_results[0].warnings == [
+        "No additional measurements were retrieved."
+    ]
+    assert len(provider.requests) == 2
+
+
+def test_interview_preserves_full_totals_staleness_warnings_and_truncation(
+    settings, context, service
+):
+    settings.ai_max_analytics_tool_rounds = 1
+    settings.ai_max_result_rows = 2
+    rows = [
+        {
+            "server_id": "stale-server",
+            "effective_health": "STALE",
+            "observed_at": None,
+            "completion_age_seconds": 500,
+            "estimated_cost": None,
+        },
+        {
+            "server_id": "missing-server",
+            "effective_health": "NO_DATA",
+            "observed_at": None,
+            "completion_age_seconds": None,
+            "estimated_cost": None,
+        },
+    ]
+    totals = {
+        "inventory_servers": 75,
+        "healthy_servers": 70,
+        "critical_servers": 1,
+        "warning_servers": 2,
+        "stale_servers": 1,
+        "no_data_servers": 1,
+    }
+    service.health.return_value = AnalyticsReport(
+        reference_time=END,
+        window_start=context.start,
+        window_end=context.end,
+        parameters={"freshness_seconds": 120},
+        rows=rows,
+        currency="USD",
+        warnings=["No current measurements for these detail rows."],
+    )
+    service.fleet_totals.return_value = AnalyticsReport(
+        reference_time=END, parameters={"freshness_seconds": 120}, rows=[totals]
+    )
+    provider = FakeProvider(
+        [call("get_server_health"), Completion(content="Recorded fleet counts.")]
+    )
+    response = asyncio.run(AnalyticsHarness(provider, service, settings).query(context, "totals"))
+    result = response.evidence.tool_results[0].result
+    assert result["rows"] == rows and result["fleet_summary"] == totals
+    assert result["result_may_be_truncated"] is True and result["row_limit"] == 2
+    assert "Detail rows may be truncated" in response.answer
+    wire = json.loads(
+        next(
+            message["content"]
+            for message in provider.requests[1]["messages"]
+            if message["role"] == "tool"
+        )
+    )
+    for field in (
+        "fleet_summary",
+        "reference_time",
+        "window_start",
+        "window_end",
+        "parameters",
+        "warnings",
+        "currency",
+        "row_limit",
+        "result_may_be_truncated",
+    ):
+        assert wire[field] == result[field]
+    restored = [dict(zip(wire["row_columns"], row, strict=True)) for row in wire["rows"]]
+    assert restored == rows
+    assert response.evidence.freshness["per_tool"][0]["servers"][0]["effective_health"] == "STALE"
+
+
+@pytest.mark.parametrize("failed_round", [1, 2])
+def test_interview_rate_limit_preserves_failure_without_retries(
+    settings, context, service, failed_round
+):
+    settings.ai_max_analytics_tool_rounds = 1
+    provider = FakeProvider([call()] * (failed_round - 1) + [AIError("AI_RATE_LIMITED", 429)])
+    with pytest.raises(AIError) as raised:
+        asyncio.run(AnalyticsHarness(provider, service, settings).query(context, "limited"))
+    assert raised.value.code == "AI_RATE_LIMITED" and raised.value.status == 429
+    assert len(provider.requests) == failed_round
+    assert service.overview.call_count == failed_round - 1
+
+
+@pytest.mark.parametrize(
+    "usage,expected",
+    [
+        (
+            {"prompt_tokens": 1300, "completion_tokens": 40, "total_tokens": 1340},
+            {"prompt_tokens": 1300, "completion_tokens": 40, "total_tokens": 1340},
+        ),
+        (
+            {"prompt_tokens": 0, "completion_tokens": True, "total_tokens": "900"},
+            {"prompt_tokens": 0},
+        ),
+        ({"prompt_tokens": -1, "completion_tokens": 1.5, "total_tokens": 1000000001}, {}),
+        (
+            {"prompt_tokens": {"secret": "private-usage-text"}, "total_tokens": 12},
+            {"total_tokens": 12},
+        ),
+        (None, {}),
+        ([], {}),
+        ("private-usage-text", {}),
+    ],
+)
+def test_provider_usage_logs_only_bounded_integer_counters(settings, usage, expected):
+    from structlog.testing import capture_logs
+
+    settings.groq_api_key = SecretStr("private-provider-key")
+    if isinstance(usage, dict):
+        usage = {**usage, "secret": "private-usage-text"}
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(
+            200, json={"choices": [{"message": {"content": "private-answer"}}], "usage": usage}
+        )
+    )
+    with capture_logs() as events:
+        completion = asyncio.run(
+            GroqProvider(settings, transport).complete(
+                [{"role": "user", "content": "private-prompt"}], [], "none"
+            )
+        )
+    assert completion.content == "private-answer"
+    if expected:
+        assert events == [
+            {"event": "ai_provider_usage", "log_level": "info", "request_id": None, **expected}
+        ]
+    else:
+        assert events == []
+    assert "private" not in json.dumps(events)
+
+
 def test_prod_server_list_compact_round_trip(settings, context, service):
     context.question = "get me status on servers from prod"
     rows = [

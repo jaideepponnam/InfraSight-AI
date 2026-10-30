@@ -4,6 +4,7 @@ Configure GROQ_API_KEY privately through environment/settings. Never paste it in
 logs, documentation, examples, or screenshots. GROQ_MODEL defaults to
 openai/gpt-oss-120b. Other settings: GROQ_TIMEOUT_SECONDS=20,
 AI_REQUEST_TIMEOUT_SECONDS=60, AI_MAX_RESULT_ROWS=20. httpx is a runtime dependency.
+AI_MAX_ANALYTICS_TOOL_ROUNDS defaults to 3 and accepts integers from 1 through 3.
 The provider protocol can later support watsonx without changing analytics tools.
 
 Start the existing FastAPI factory on loopback as documented in Phase 5. POST
@@ -42,8 +43,9 @@ not zero. Incomplete/unequal comparisons must not become confident trend claims.
 With an explicit selected window, compare_cost defaults to the same UTC period one day
 earlier. Without one, it uses Phase 5 comparison modes. There is no guaranteed savings claim.
 
-Limits: three tool-call rounds, at most three calls per round, at most one final explanation
-request; 2,000-character questions; seven-day windows; bounded rows and 32,000-character
+Limits: three analytics tool-call rounds by default, at most three calls per round, one
+reserved final explanation request; 2,000-character questions; seven-day windows; bounded
+rows and 32,000-character
 tool results. Unknown tools, invalid arguments, or failed analytics abort the request.
 Provider 429 returns sanitized HTTP 429; timeouts 504; unavailable/configuration failures
 503; malformed tool/provider responses 502. No automatic quota-consuming retries.
@@ -52,6 +54,33 @@ limits. Cancelling a request cannot forcibly terminate a database thread; statem
 remain bounded by PostgreSQL timeouts. Logs contain tool names/counts/duration, never
 questions, prompts, arguments, results or keys. Each tool reads a service snapshot;
 multiple tool calls are not a single global snapshot.
+
+### Interview token budget
+
+After a separately approved backend release, set AI_MAX_ANALYTICS_TOOL_ROUNDS=1 on
+isolated staging for one tool-calling round followed by one schema-free summary request:
+at most two Groq requests per analytics question, with no automatic retries. All ten
+analytics tools remain available. Compound questions may require a more focused follow-up;
+the final prompt requires explicit uncertainty about conclusions not supported by retrieved
+evidence. Empty evidence produces an explicit insufficient-evidence answer, and bounded
+detail lists carry a deterministic truncation caveat. Existing incident investigations retain
+their three tool rounds and deterministic incident explanation.
+
+AI_MAX_RESULT_ROWS=5 is an optional additional staging setting to reduce detail rows.
+Complete fleet_summary totals remain independent of the row limit. Full public evidence,
+timestamps, freshness, coverage, warnings, null values and truncation metadata are retained.
+Provider rows still use lossless column/value encoding. Analytics tool schemas omit fixed
+window, comparison and sample arguments already supplied by request context; backend
+validation and context restrictions remain unchanged. No model/key change is needed.
+
+Successful provider responses log only allowlisted nonnegative integer prompt_tokens,
+completion_tokens and total_tokens when supplied, with the request ID. Malformed counters
+and other usage fields are ignored; prompts, answers, tool results and credentials are never
+logged. Byte counts are not token estimates. A smaller round budget reduces usage but
+cannot guarantee availability under shared free-tier quotas or concurrent public queries.
+This optimization is verified with mocked providers and disposable local PostgreSQL only;
+automated checks do not establish live Groq reliability. ETL and SRE recovery policies
+are unchanged.
 
 ## Small real demo
 

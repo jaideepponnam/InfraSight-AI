@@ -150,29 +150,21 @@ class ToolRegistry:
                 "source_id",
                 "currency",
             }
+            if self.context.start is not None:
+                context_controlled.update({"start", "end"})
+                if tool.method == "comparison":
+                    context_controlled.update(
+                        {"mode", "current_start", "current_end", "previous_start", "previous_end"}
+                    )
+            if self.context.min_samples is not None:
+                context_controlled.add("min_samples")
             for field in context_controlled:
                 schema["properties"].pop(field, None)
             if "required" in schema:
                 schema["required"] = [
                     field for field in schema["required"] if field not in context_controlled
                 ]
-            # Keep the complete typed contract visible; execution still freezes context.
-            context_defaults = {
-                "as_of": self.context.model_dump(mode="json")["reference_time"],
-                "freshness_seconds": self.context.freshness_seconds
-                or self.settings.analytics_freshness_seconds,
-                "currency": self.context.currency,
-            }
-            if self.context.source_id is not None:
-                context_defaults["source_id"] = self.context.source_id
-            if self.context.start is not None:
-                serialized = self.context.model_dump(mode="json")
-                context_defaults.update(start=serialized["start"], end=serialized["end"])
-            if self.context.min_samples is not None:
-                context_defaults["min_samples"] = self.context.min_samples
-            for field, value in context_defaults.items():
-                if field in schema["properties"]:
-                    schema["properties"][field]["default"] = value
+            # Execution still validates arguments and injects the frozen request context.
             schema.pop("title", None)
             for field in schema["properties"].values():
                 field.pop("title", None)

@@ -79,3 +79,26 @@ def test_public_etl_flag_environment_loading(settings, monkeypatch, value, expec
         Settings(_env_file=None, database_url=settings.database_url).demo_public_etl_enabled
         is expected
     )
+
+
+def test_analytics_tool_rounds_preserve_existing_default(settings, monkeypatch):
+    monkeypatch.delenv("AI_MAX_ANALYTICS_TOOL_ROUNDS", raising=False)
+    configured = Settings(_env_file=None, database_url=settings.database_url)
+    assert configured.ai_max_analytics_tool_rounds == 3
+
+
+@pytest.mark.parametrize("value", ["1", "2", "3"])
+def test_analytics_tool_rounds_environment_loading(settings, monkeypatch, value):
+    monkeypatch.setenv("AI_MAX_ANALYTICS_TOOL_ROUNDS", value)
+    configured = Settings(_env_file=None, database_url=settings.database_url)
+    assert configured.ai_max_analytics_tool_rounds == int(value)
+
+
+@pytest.mark.parametrize("value", [0, 4, -1, "1.5"])
+def test_analytics_tool_rounds_are_bounded(settings, value):
+    with pytest.raises(ValidationError):
+        Settings(
+            _env_file=None,
+            database_url=settings.database_url,
+            ai_max_analytics_tool_rounds=value,
+        )

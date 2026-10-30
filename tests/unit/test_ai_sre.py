@@ -175,6 +175,44 @@ def test_scopes_and_disabled_are_isolated(settings, recorded):
     queries.snapshot.assert_not_called()
 
 
+def test_analytics_round_limit_does_not_limit_incident_investigation(settings, recorded):
+    _, queries, context = registry(settings, recorded)
+    settings.ai_max_analytics_tool_rounds = 1
+
+    class MultiRoundProvider:
+        def __init__(self):
+            self.requests = []
+
+        async def complete(self, messages, tools, choice):
+            self.requests.append({"messages": list(messages), "tools": tools})
+            if len(self.requests) <= 3:
+                return Completion.model_validate(
+                    {
+                        "tool_calls": [
+                            {
+                                "id": f"incident-call-{len(self.requests)}",
+                                "function": {
+                                    "name": "get_sre_incident_evidence",
+                                    "arguments": "{}",
+                                },
+                            }
+                        ]
+                    }
+                )
+            return Completion(content="INVENTED unverified recovery")
+
+    provider = MultiRoundProvider()
+    response = asyncio.run(
+        AnalyticsHarness(provider, Mock(), settings, queries).query(context, "sre")
+    )
+    assert len(provider.requests) == 4
+    assert all(request["tools"] for request in provider.requests[:3])
+    assert provider.requests[-1]["tools"] == []
+    assert queries.snapshot.call_count == 3
+    assert "INVENTED" not in response.answer
+    assert response.evidence.tools_used == ["get_sre_incident_evidence"] * 3
+
+
 @pytest.mark.parametrize(
     "name,arguments",
     [

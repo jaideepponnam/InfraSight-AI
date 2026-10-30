@@ -13,11 +13,13 @@ pytestmark = pytest.mark.integration
 
 
 class FakeProvider:
-    def __init__(self, tool):
+    def __init__(self, tool, arguments="{}"):
         self.tool, self.calls = tool, 0
+        self.arguments, self.requests = arguments, []
 
     async def complete(self, messages, tools, choice):
         self.calls += 1
+        self.requests.append({"messages": list(messages), "tools": tools, "choice": choice})
         if self.calls == 1:
             return Completion.model_validate(
                 {
@@ -25,7 +27,7 @@ class FakeProvider:
                         {
                             "id": "call-db",
                             "type": "function",
-                            "function": {"name": self.tool, "arguments": "{}"},
+                            "function": {"name": self.tool, "arguments": self.arguments},
                         }
                     ]
                 }
@@ -45,7 +47,9 @@ class FakeProvider:
         "get_top_resource_usage",
     ],
 )
-def test_ai_tools_use_actual_postgres(analytics_data, settings, tool):
+@pytest.mark.parametrize("rounds", [1, 3])
+def test_ai_tools_use_actual_postgres(analytics_data, settings, tool, rounds):
+    settings.ai_max_analytics_tool_rounds = rounds
     data = analytics_data
     server = data.server("ai-server")
     data.metric(server, cpu="95", health="CRITICAL", cost="0.12345678")
@@ -56,13 +60,18 @@ def test_ai_tools_use_actual_postgres(analytics_data, settings, tool):
         start=data.start,
         end=data.start + timedelta(seconds=30),
     )
+    provider = FakeProvider(tool)
     response = asyncio.run(
-        AnalyticsHarness(FakeProvider(tool), AnalyticsService(data.db, settings), settings).query(
+        AnalyticsHarness(provider, AnalyticsService(data.db, settings), settings).query(
             context, "db-request"
         )
     )
     result = response.evidence.tool_results[0].result
     assert response.evidence.tools_used == [tool]
+    assert provider.calls == 2
+    if rounds == 1:
+        assert provider.requests[1]["tools"] == []
+        assert provider.requests[1]["choice"] == "none"
     assert result["rows"]
     assert "never-expose" not in response.model_dump_json()
     if tool == "get_overview":
@@ -135,3 +144,27 @@ def test_server_status_counts_entire_filtered_cohort(analytics_data, settings, e
     assert len(result["rows"]) == 3
     assert all(row["environment"] == environment for row in result["rows"])
     assert result["result_may_be_truncated"] is True
+
+    settings.ai_max_analytics_tool_rounds = 1
+    provider = FakeProvider(
+        "get_server_health", json.dumps({"environment": environment, "limit": 3})
+    )
+    response = asyncio.run(
+        AnalyticsHarness(provider, AnalyticsService(data.db, settings), settings).query(
+            context, "interview-totals"
+        )
+    )
+    attached = response.evidence.tool_results[0].result
+    assert attached == result
+    assert "Detail rows may be truncated" in response.answer
+    assert provider.calls == 2 and provider.requests[-1]["tools"] == []
+    wire = json.loads(
+        next(
+            message["content"]
+            for message in provider.requests[-1]["messages"]
+            if message["role"] == "tool"
+        )
+    )
+    assert wire["fleet_summary"] == summary
+    assert wire["result_may_be_truncated"] is True
+    assert wire["reference_time"] == result["reference_time"]

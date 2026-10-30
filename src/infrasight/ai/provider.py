@@ -129,7 +129,22 @@ class GroqProvider:
             if len(response.content) > 100000:
                 raise AIError("AI_PROVIDER_INVALID_RESPONSE")
             data = response.json()
-            return Completion.model_validate(data["choices"][0]["message"])
+            completion = Completion.model_validate(data["choices"][0]["message"])
+            usage = data.get("usage")
+            if isinstance(usage, dict):
+                # Never log the usage object or provider messages; allow numeric counters only.
+                counters = {
+                    name: usage[name]
+                    for name in ("prompt_tokens", "completion_tokens", "total_tokens")
+                    if type(usage.get(name)) is int and 0 <= usage[name] <= 1000000000
+                }
+                if counters:
+                    structlog.get_logger(__name__).info(
+                        "ai_provider_usage",
+                        request_id=structlog.contextvars.get_contextvars().get("request_id"),
+                        **counters,
+                    )
+            return completion
         except httpx.TimeoutException as exc:
             raise AIError("AI_PROVIDER_TIMEOUT", 504) from exc
         except httpx.TransportError as exc:
