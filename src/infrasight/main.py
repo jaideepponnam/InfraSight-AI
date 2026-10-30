@@ -91,7 +91,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def openapi_with_combined_admin_security():
         schema = original_openapi()
         for path, operations in schema["paths"].items():
-            if path == "/api/v1/etl/run" or path.startswith("/api/v1/sre/"):
+            if path in {"/api/v1/etl/run", "/api/v1/demo/etl/run"} or path.startswith(
+                "/api/v1/sre/"
+            ):
                 if "post" in operations:
                     operations["post"]["security"] = [{"ApplicationKey": [], "AdminKey": []}]
         return schema

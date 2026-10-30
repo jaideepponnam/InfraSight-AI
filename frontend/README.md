@@ -43,7 +43,7 @@ frontend port is occupied, run npm.cmd run dev -- --port 5174 instead.
 
 The Live assessment uses the most recently requested successful simulated-cloud
 ETL run's window end as its reference. It remains stable until a newer successful
-run is loaded via navigation, Refresh, or completion of Run Demo ETL. Running and
+run is loaded via navigation or Refresh after an operator completes ingestion. Running and
 failed runs do not replace it. The analysis window is the hour preceding that
 reference, with a 20-sample minimum for relevant AI tools. Freshness is evaluated
 at that reference using the existing 120-second threshold. With no successful
@@ -67,10 +67,18 @@ Production uses the configured HTTPS API origin directly. See the
 
 VITE_* values are browser-visible. VITE_API_READ_KEY is an intentional public/demo
 credential. Never include admin, database or provider secrets in frontend settings.
-General POST /api/v1/etl/run still requires both read and admin keys. The separate
-POST /api/v1/demo/etl/run accepts the read key only for simulated-cloud and a
-server-selected current window of at most 120 seconds. It rejects client parameters
-and cannot ingest host metrics. No replay or unrestricted mutation controls exist.
+Both POST /api/v1/etl/run and POST /api/v1/demo/etl/run require read and admin keys.
+The bounded demo endpoint remains available to trusted operators for simulated-cloud
+and a server-selected current window of at most 120 seconds. It rejects client
+parameters and cannot ingest host metrics. Pipeline displays recorded runs and a
+read-only explanation; Refresh checks for new operator-created results. The browser
+has no ETL mutation method or admin credential input.
+
+The public read key still permits Scout queries. For initial public staging, leave
+GROQ_API_KEY unset on the backend: Analyze reports AI unavailable without contacting
+the provider. Enabling live public AI later requires a separate quota/access review;
+per-request limits do not cap aggregate usage. Public staging data must be suitable
+for public viewing, and CORS does not prevent reuse of the browser-visible read key.
 
 Money remains exact strings/Decimal values; Number conversion is used only for
 chart geometry. Coverage percentages and server reporting counts are distinct.
@@ -81,7 +89,6 @@ Consumed endpoints:
 - GET /api/v1/analytics/regions
 - GET /api/v1/analytics/average-health (only when Avg is selected)
 - GET /api/v1/etl/runs (latest history and successful-run reference)
-- POST /api/v1/demo/etl/run (explicit button click)
 - POST /api/v1/ai/query (explicit Analyze action)
 
 ## Verification

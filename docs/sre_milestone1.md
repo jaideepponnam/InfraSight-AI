@@ -65,8 +65,10 @@ A new exercise can then run.
 
 Prefix: /api/v1/sre. All GETs require X-API-Key. **Every POST requires both X-API-Key
 and X-Admin-Key.** No privileged credential belongs in React, Vite, browser storage or URLs.
-CORS does not permit admin/idempotency headers. The existing simulator ETL demo's
-authorization is unchanged.
+CORS does not permit admin/idempotency headers. For public-frontend hardening,
+the separate simulator ETL demo also requires both read and admin keys. Its browser
+action has been replaced with a read-only explanation and recorded run history;
+SRE exercise endpoints and their authorization remain unchanged.
 
 | Method | Path | Contract |
 | --- | --- | --- |

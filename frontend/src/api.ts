@@ -2,7 +2,6 @@ import type {
   AIResponse,
   IncidentContext,
   AverageHealth,
-  DemoETLResult,
   Context,
   Envelope,
   Overview,
@@ -228,9 +227,6 @@ export class APIClient {
       "etl/runs?" +
         new URLSearchParams({ source_id: context.source_id, limit: "8" }),
     );
-  }
-  demoETL() {
-    return this.request<Envelope<DemoETLResult>>("demo/etl/run", {}, "envelope");
   }
   ask(question: string, context: Context | IncidentContext) {
     return this.request<AIResponse>("ai/query", aiBody(question, context));

@@ -111,9 +111,10 @@ def test_openapi_security(api_app):
     spec = api_app.openapi()
     assert spec["components"]["securitySchemes"]["ApplicationKey"]["name"] == "X-API-Key"
     assert spec["components"]["securitySchemes"]["AdminKey"]["name"] == "X-Admin-Key"
-    post = spec["paths"]["/api/v1/etl/run"]["post"]
-    assert post["security"] == [{"ApplicationKey": [], "AdminKey": []}]
-    assert "202" not in post["responses"]
+    for path in ("/api/v1/etl/run", "/api/v1/demo/etl/run"):
+        post = spec["paths"][path]["post"]
+        assert post["security"] == [{"ApplicationKey": [], "AdminKey": []}]
+        assert "202" not in post["responses"]
     assert "security" not in spec["paths"]["/health"]["get"]
     assert "unit-read-key" not in str(spec)
 

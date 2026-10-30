@@ -1,8 +1,9 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
+from infrasight.api.auth import require_admin
 from infrasight.api.dependencies import result_response
 from infrasight.api.operations import OperationsService
 from infrasight.api.schemas import TriggerEnvelope
@@ -16,10 +17,11 @@ class DemoETLRequest(BaseModel):
 
 @router.post(
     "/etl/run",
+    dependencies=[Depends(require_admin)],
     response_model=TriggerEnvelope,
     response_model_exclude_unset=True,
     summary="Run one controlled simulator ingestion cycle",
-    description="Read-key authorized; fixed simulator source; server-selected current UTC window "
+    description="Requires both read and admin API keys; fixed simulator source; current UTC window "
     "of at most 120 seconds. No client parameters. Synchronous result. Source lock "
     "prevents overlaps. General admin ETL authorization remains unchanged.",
 )

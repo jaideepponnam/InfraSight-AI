@@ -12,6 +12,9 @@ from infrasight.ingestion.errors import SourceBusyError
 from infrasight.ingestion.schemas import RunCounts, RunResult
 from infrasight.main import create_app
 
+READ = {"X-API-Key": "demo-read-test"}
+ADMIN = {**READ, "X-Admin-Key": "admin-test-only"}
+
 
 @pytest.fixture
 def demo_app(settings, monkeypatch):
@@ -39,13 +42,11 @@ def demo_app(settings, monkeypatch):
     return create_app(settings), pipeline, constructor, host
 
 
-def test_demo_read_key_fixed_simulator_window(demo_app, settings):
+def test_demo_admin_keys_fixed_simulator_window(demo_app, settings):
     app, pipeline, constructor, host = demo_app
     before = datetime.now(UTC)
     with TestClient(app) as client:
-        response = client.post(
-            "/api/v1/demo/etl/run", headers={"X-API-Key": "demo-read-test"}, json={}
-        )
+        response = client.post("/api/v1/demo/etl/run", headers=ADMIN, json={})
     after = datetime.now(UTC)
     assert response.status_code == 200
     source, start, end = pipeline.run_cycle.call_args.args
@@ -66,13 +67,33 @@ def test_demo_read_key_fixed_simulator_window(demo_app, settings):
 
 
 @pytest.mark.parametrize(
-    "headers", [{}, {"X-API-Key": "wrong"}, {"X-Admin-Key": "admin-test-only"}]
+    "headers",
+    [
+        {},
+        READ,
+        {"X-API-Key": "wrong"},
+        {"X-Admin-Key": "admin-test-only"},
+        {**ADMIN, "X-API-Key": "wrong"},
+        {**READ, "X-Admin-Key": "wrong"},
+    ],
 )
 def test_demo_auth(demo_app, headers):
-    app, pipeline, _, _ = demo_app
+    app, pipeline, constructor, host = demo_app
     with TestClient(app) as client:
         assert client.post("/api/v1/demo/etl/run", headers=headers, json={}).status_code == 401
     pipeline.run_cycle.assert_not_called()
+    constructor.assert_not_called()
+    host.assert_not_called()
+
+
+def test_demo_unconfigured_admin_fails_closed(demo_app, settings):
+    app, pipeline, constructor, host = demo_app
+    settings.api_admin_key = None
+    with TestClient(app) as client:
+        assert client.post("/api/v1/demo/etl/run", headers=READ, json={}).status_code == 503
+    pipeline.run_cycle.assert_not_called()
+    constructor.assert_not_called()
+    host.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -90,18 +111,8 @@ def test_demo_auth(demo_app, headers):
 def test_demo_rejects_client_parameters(demo_app, body):
     app, pipeline, _, _ = demo_app
     with TestClient(app) as client:
-        assert (
-            client.post(
-                "/api/v1/demo/etl/run", headers={"X-API-Key": "demo-read-test"}, json=body
-            ).status_code
-            == 422
-        )
-        assert (
-            client.post(
-                "/api/v1/demo/etl/run?source=host", headers={"X-API-Key": "demo-read-test"}
-            ).status_code
-            == 422
-        )
+        assert client.post("/api/v1/demo/etl/run", headers=ADMIN, json=body).status_code == 422
+        assert client.post("/api/v1/demo/etl/run?source=host", headers=ADMIN).status_code == 422
     pipeline.run_cycle.assert_not_called()
 
 
@@ -116,7 +127,7 @@ def test_demo_safe_failures(demo_app, error, status):
     app, pipeline, _, _ = demo_app
     pipeline.run_cycle.side_effect = error
     with TestClient(app, raise_server_exceptions=False) as client:
-        response = client.post("/api/v1/demo/etl/run", headers={"X-API-Key": "demo-read-test"})
+        response = client.post("/api/v1/demo/etl/run", headers=ADMIN)
     assert response.status_code == status
     assert "private" not in response.text
 
@@ -125,10 +136,7 @@ def test_demo_invalid_interval_fails_closed(demo_app, settings):
     app, pipeline, _, _ = demo_app
     settings.telemetry_interval_seconds = 180
     with TestClient(app) as client:
-        assert (
-            client.post("/api/v1/demo/etl/run", headers={"X-API-Key": "demo-read-test"}).status_code
-            == 503
-        )
+        assert client.post("/api/v1/demo/etl/run", headers=ADMIN).status_code == 503
     pipeline.run_cycle.assert_not_called()
 
 
@@ -150,7 +158,7 @@ def test_demo_failed_run_is_auditable(demo_app):
 
     pipeline.run_cycle.side_effect = failed
     with TestClient(app) as client:
-        response = client.post("/api/v1/demo/etl/run", headers={"X-API-Key": "demo-read-test"})
+        response = client.post("/api/v1/demo/etl/run", headers=ADMIN)
         assert (
             client.post(
                 "/api/v1/etl/run", headers={"X-API-Key": "demo-read-test"}, json={}

@@ -48,12 +48,14 @@ No backend redesign, deployment, workers, commit or push belongs to this phase.
 
 ### Simple Pipeline demo
 
-Run Demo ETL executes only simulated-cloud for a server-chosen current UTC window
-of at most 120 seconds. The normal demo read key authorizes this narrow action;
-general admin ETL still requires the admin key. No client parameters, host source,
-replay controls, live database browsing, scheduler, or new infrastructure is exposed.
-Results show counters and refresh run history. The database reference is fictional
-and collapsed by default; it makes no data requests.
+Pipeline displays recorded run counters and history with a read-only explanation.
+Ingestion is managed by an operator; the browser has no Run Demo ETL action.
+POST /api/v1/demo/etl/run requires both read and admin keys, just like general ETL.
+It retains only simulated-cloud and a server-chosen current UTC window of at most
+120 seconds. No client parameters, host source, replay controls, live database
+browsing, scheduler, or new infrastructure is exposed. Refresh loads newly recorded
+operator results. The database reference is fictional and collapsed by default;
+it makes no data requests. Admin, database and provider secrets stay outside the browser.
 
 The React dashboard now defaults to Live, with Overview, AI Analyst, and Pipeline
 in the top header. After a new run, open Overview or AI Analyst, or use Refresh
@@ -68,8 +70,8 @@ deploy the backend before the frontend.
 The React dashboard resolves the most recently requested successful simulated-cloud
 ETL run before loading analytics. Health/reference time is pinned to its requested
 window end; the selected analysis period is the preceding hour. Refresh or navigation
-checks for a newer successful run. Demo ingestion refreshes history and that reference
-after completion. A running/failed run never replaces the last successful assessment.
+checks for a newer successful run after an operator completes ingestion. A running/failed
+run never replaces the last successful assessment.
 Freshness rules remain unchanged and are evaluated at the explicitly displayed run
 reference, not the current wall clock. Without a successful run, the dashboard uses
 current time and honestly displays missing/stale telemetry. There is no scheduler or
