@@ -5,12 +5,13 @@ import { date } from "./format";
 const pages = ["Overview", "Live Operations", "Incident Center", "AI Analyst", "Pipeline"] as const;
 export type HeaderPage = typeof pages[number];
 
-export function AppHeader({ page, referenceTime, busy, onNavigate, onRefresh }: {
+export function AppHeader({ page, referenceTime, busy, onNavigate, onRefresh, storedEvidence = false }: {
   page: HeaderPage; referenceTime: string; busy: boolean;
   onNavigate: (page: HeaderPage) => void; onRefresh: () => void;
+  storedEvidence?: boolean;
 }) {
   const timestamp = date(referenceTime);
-  const srePage = page === "Live Operations" || page === "Incident Center";
+  const srePage = storedEvidence || page === "Live Operations" || page === "Incident Center";
   const separator = timestamp.lastIndexOf(", ");
   return <header className="app-header">
     <a className="brand" href="#" aria-label="InfraSight AI - Overview" onClick={event => { event.preventDefault(); onNavigate("Overview"); }}>

@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
+from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -7,6 +8,8 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validato
 class QueryRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     question: str = Field(min_length=1, max_length=2000)
+    analysis_scope: Literal["analytics", "incidents"] = "analytics"
+    incident_id: UUID | None = None
     source_id: str | None = Field(default=None, min_length=1, max_length=256)
     reference_time: AwareDatetime = Field(default_factory=lambda: datetime.now(UTC))
     start: AwareDatetime | None = None
@@ -29,6 +32,18 @@ class QueryRequest(BaseModel):
 
     @model_validator(mode="after")
     def bounded_window(self):
+        if self.incident_id is not None and self.analysis_scope != "incidents":
+            raise ValueError("Incident context requires incident investigation scope")
+        if self.analysis_scope == "incidents" and self.model_fields_set & {
+            "source_id",
+            "reference_time",
+            "start",
+            "end",
+            "currency",
+            "freshness_seconds",
+            "min_samples",
+        }:
+            raise ValueError("Incident evidence uses server time and policy, not ETL context")
         if (self.start is None) != (self.end is None):
             raise ValueError("Both window boundaries are required")
         if self.start is not None:
@@ -58,7 +73,7 @@ class Evidence(BaseModel):
     window: dict[str, datetime | None]
     freshness: dict[str, Any]
     coverage: list[dict[str, Any]]
-    currency: str
+    currency: str | None
     tool_results: list[ToolEvidence]
 
 

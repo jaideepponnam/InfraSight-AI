@@ -7,6 +7,7 @@ from starlette.concurrency import run_in_threadpool
 
 from infrasight.ai.provider import AIError, LLMProvider
 from infrasight.ai.schemas import Evidence, QueryResponse, ToolEvidence
+from infrasight.ai.sre_tools import SRE_SYSTEM, incident_answer
 from infrasight.ai.tools import ToolRegistry, metadata
 
 SYSTEM = """You are InfraSight-AI's read-only infrastructure analyst. Use approved tools for
@@ -55,8 +56,9 @@ def provider_result(result):
 
 
 class AnalyticsHarness:
-    def __init__(self, provider: LLMProvider, service, settings):
+    def __init__(self, provider: LLMProvider, service, settings, sre_queries=None):
         self.provider, self.service, self.settings = provider, service, settings
+        self.sre_queries = sre_queries
 
     async def query(self, request, request_id):
         started = time.monotonic()
@@ -75,15 +77,24 @@ class AnalyticsHarness:
         return response
 
     async def _query(self, request, request_id):
-        registry = ToolRegistry(self.service, self.settings, request)
+        incidents = request.analysis_scope == "incidents"
+        if incidents and not self.settings.sre_enabled:
+            raise AIError("SRE_DISABLED", 503)
+        registry = ToolRegistry(self.service, self.settings, request, self.sre_queries)
         messages = [
-            {"role": "system", "content": SYSTEM},
+            {"role": "system", "content": SRE_SYSTEM if incidents else SYSTEM},
             {
                 "role": "user",
                 "content": json.dumps(
                     {
                         "question": request.question,
-                        "context": request.model_dump(mode="json", exclude={"question"}),
+                        "context": request.model_dump(
+                            mode="json", include={"analysis_scope", "incident_id"}
+                        )
+                        if incidents
+                        else request.model_dump(
+                            mode="json", exclude={"question", "analysis_scope", "incident_id"}
+                        ),
                     }
                 ),
             },
@@ -154,19 +165,23 @@ class AnalyticsHarness:
                 if not completion.content or not completion.content.strip():
                     raise AIError("AI_PROVIDER_INVALID_RESPONSE")
                 return QueryResponse(
-                    answer=completion.content.strip(),
+                    answer=incident_answer(evidence) if incidents else completion.content.strip(),
                     request_id=request_id,
                     evidence=Evidence(
                         tools_used=[e.tool for e in evidence],
-                        reference_time=request.reference_time,
+                        reference_time=evidence[-1].reference_time
+                        if incidents
+                        else request.reference_time,
                         window={"start": request.start, "end": request.end},
                         freshness={
-                            "threshold_seconds": request.freshness_seconds
+                            "threshold_seconds": 15
+                            if incidents
+                            else request.freshness_seconds
                             or self.settings.analytics_freshness_seconds,
                             "per_tool": [e.freshness for e in evidence],
                         },
                         coverage=[c for e in evidence for c in e.coverage],
-                        currency=request.currency,
+                        currency=None if incidents else request.currency,
                         tool_results=evidence,
                     ),
                 )

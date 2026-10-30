@@ -44,6 +44,7 @@ export function IncidentDetails({ id, client, refresh, onRefresh, onBack, onBusy
       <Tile className="sre-incident-summary">
         <div className="sre-incident-title"><div><p className="eyebrow">{data.incident.severity} · CONTROLLED DEPENDENCY FAILURE</p><h2>{data.incident.title}</h2>
           <code className="sre-record-id">{data.incident.id}</code></div><StateTag state={data.incident.state} /></div>
+        <p className="sre-space"><a href={"#/scout/incidents/" + encodeURIComponent(data.incident.id)}>Investigate with Scout</a></p>
         <dl className="sre-facts sre-metadata">
           <div><dt>Service</dt><dd>{data.services.find(service => service.id === data.incident.service_id)?.service_key ?? data.incident.service_id}</dd></div>
           <div><dt>Detected</dt><dd><SRETime value={data.incident.detected_at} /></dd></div>

@@ -127,7 +127,17 @@ Its first scenario is a controlled application-dependency HTTP 503 failure, not 
 storage outage. It runs on demand without a background worker. Existing telemetry,
 analytics, Scout and frontend features remain available.
 
-SRE is disabled by default. No SRE pages or Scout incident integration are included.
+SRE is disabled by default. Milestone 1 itself includes no SRE pages or Scout integration.
 See [the Milestone 1 runbook](docs/sre_milestone1.md) for the API, limitations, and exact
 local review instructions using a disposable database. Production deployment and
 migration require separate approval.
+
+## InfraSight AI 2.0: Scout incident intelligence (Milestone 3)
+
+Scout now investigates persisted sandbox SRE incidents through its existing read-only
+tool harness. The existing dashboard's **Investigate with Scout** link populates an
+incident context without submitting a query. Evidence-backed summaries distinguish
+historical recovery verification from current observation freshness. Analytics remains
+available when SRE is disabled. See [the Milestone 3 guide](docs/scout_incidents.md) for
+contracts, safeguards, limitations and disposable local validation instructions, and
+[the dashboard guide](docs/sre_dashboard.md) for Milestone 2.

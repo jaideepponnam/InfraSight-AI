@@ -38,6 +38,9 @@ jobs:
           src/infrasight/config.py src/infrasight/main.py
           src/infrasight/sre src/infrasight/db/models/sre.py
           src/infrasight/api/sre.py src/infrasight/api/sre_demo.py
+          src/infrasight/ai/harness.py src/infrasight/ai/tools.py
+          src/infrasight/ai/schemas.py src/infrasight/ai/sre_tools.py src/infrasight/api/ai.py
+          tests/unit/test_ai_sre.py tests/integration/test_scout_incidents.py
           tests/unit/test_production.py tests/unit/test_sre_lifecycle.py
           tests/unit/test_sre_security.py tests/integration/test_sre_demo.py
           tests/integration/test_sre_incidents.py tests/integration/test_sre_migrations.py

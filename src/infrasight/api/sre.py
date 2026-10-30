@@ -4,26 +4,22 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Query, Request
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from infrasight.api.auth import require_admin
 from infrasight.api.dependencies import sre_service
 from infrasight.db.models.sre import (
-    SREDemoRun,
-    SREIncident,
-    SREIncidentEvent,
-    SREProbeResult,
-    SRERecoveryAttempt,
     SREService,
 )
 from infrasight.sre.lifecycle import SREError
+from infrasight.sre.queries import SREQueries
 from infrasight.sre.schemas import (
+    DiagnosticEvidence,
     EventView,
     ExerciseRequest,
     IncidentFilter,
     IncidentView,
     Metadata,
-    ProbeView,
     RecoveryRequest,
     RecoveryView,
     RunView,
@@ -36,6 +32,15 @@ from infrasight.sre.services import SREService as EngineService
 router = APIRouter(prefix="/sre", tags=["SRE incidents"])
 Service = Annotated[EngineService, Depends(sre_service)]
 Key = Annotated[UUID, Header(alias="Idempotency-Key")]
+
+
+def read_service(request: Request):
+    if not request.app.state.settings.sre_enabled:
+        raise SREError("SRE_DISABLED", 503)
+    return SREQueries(request.app.state.engine)
+
+
+Reads = Annotated[SREQueries, Depends(read_service)]
 
 
 def reject_query_parameters(request: Request):
@@ -58,84 +63,24 @@ def services(request: Request, service: Service):
 
 
 @router.get("/incidents", response_model=SREEnvelope[list[IncidentView]])
-def incidents(request: Request, service: Service, params: Annotated[IncidentFilter, Query()]):
-    where = [] if params.state is None else [SREIncident.state == params.state]
-    with service.repo.sessions() as session:
-        total = session.scalar(select(func.count()).select_from(SREIncident).where(*where))
-        rows = session.scalars(
-            select(SREIncident)
-            .where(*where)
-            .order_by(SREIncident.detected_at.desc(), SREIncident.id.desc())
-            .limit(params.limit)
-            .offset(params.offset)
-        ).all()
-        return envelope(
-            request,
-            [IncidentView.model_validate(row) for row in rows],
-            total=total,
-            limit=params.limit,
-            offset=params.offset,
-        )
+def incidents(request: Request, service: Reads, params: Annotated[IncidentFilter, Query()]):
+    rows, total = service.incidents(params)
+    return envelope(request, rows, total=total, limit=params.limit, offset=params.offset)
 
 
 @router.get("/incidents/{incident_id}", response_model=SREEnvelope[IncidentView])
-def incident_detail(incident_id: UUID, request: Request, service: Service):
-    with service.repo.sessions() as session:
-        row = session.get(SREIncident, incident_id)
-        if row is None:
-            raise SREError("SRE_INCIDENT_NOT_FOUND", 404)
-        return envelope(request, IncidentView.model_validate(row))
+def incident_detail(incident_id: UUID, request: Request, service: Reads):
+    return envelope(request, service.incident(incident_id))
 
 
 @router.get("/incidents/{incident_id}/events", response_model=SREEnvelope[list[EventView]])
-def incident_events(incident_id: UUID, request: Request, service: Service):
-    with service.repo.sessions() as session:
-        if session.get(SREIncident, incident_id) is None:
-            raise SREError("SRE_INCIDENT_NOT_FOUND", 404)
-        rows = session.scalars(
-            select(SREIncidentEvent)
-            .where(
-                SREIncidentEvent.incident_id == incident_id,
-            )
-            .order_by(SREIncidentEvent.sequence)
-        ).all()
-        return envelope(request, [EventView.model_validate(row) for row in rows])
-
-
-class DiagnosticEvidence(StrictRequest):
-    run: RunView
-    probes: list[ProbeView]
-    recovery_attempts: list[RecoveryView]
+def incident_events(incident_id: UUID, request: Request, service: Reads):
+    return envelope(request, service.events(incident_id))
 
 
 @router.get("/incidents/{incident_id}/evidence", response_model=SREEnvelope[DiagnosticEvidence])
-def incident_evidence(incident_id: UUID, request: Request, service: Service):
-    with service.repo.sessions() as session:
-        row = session.get(SREIncident, incident_id)
-        if row is None:
-            raise SREError("SRE_INCIDENT_NOT_FOUND", 404)
-        probes = session.scalars(
-            select(SREProbeResult)
-            .where(
-                SREProbeResult.run_id == row.run_id,
-            )
-            .order_by(SREProbeResult.observed_at, SREProbeResult.id)
-        ).all()
-        attempts = session.scalars(
-            select(SRERecoveryAttempt)
-            .where(
-                SRERecoveryAttempt.incident_id == incident_id,
-            )
-            .order_by(SRERecoveryAttempt.started_at, SRERecoveryAttempt.id)
-        ).all()
-        return envelope(
-            request,
-            DiagnosticEvidence(
-                run=RunView.model_validate(session.get(SREDemoRun, row.run_id)),
-                probes=[ProbeView.model_validate(p) for p in probes],
-                recovery_attempts=[RecoveryView.model_validate(a) for a in attempts],
-            ),
-        )
+def incident_evidence(incident_id: UUID, request: Request, service: Reads):
+    return envelope(request, service.evidence(incident_id))
 
 
 @router.get("/demo-runs/{run_id}", response_model=SREEnvelope[RunView])

@@ -6,8 +6,11 @@ import {
   InlineLoading,
   InlineNotification,
   SkeletonText,
+  Select,
+  SelectItem,
   Tag,
   TextArea,
+  TextInput,
   Tile,
 } from "@carbon/react";
 import {
@@ -26,7 +29,8 @@ import { LiveOperations } from "./sre/LiveOperations";
 import { IncidentCenter } from "./sre/IncidentCenter";
 import { IncidentDetails } from "./sre/IncidentDetails";
 import { date, money, numeric, percent, telemetryState } from "./format";
-import type { AIResponse, Context, Overview, Region, Run } from "./types";
+import type { AIResponse, Context, IncidentContext, Overview, Region, Run } from "./types";
+import { isUUID } from "./sre/contracts";
 
 export const SUGGESTIONS = [
   "How is our infrastructure doing?",
@@ -36,13 +40,15 @@ export const SUGGESTIONS = [
   "Did infrastructure cost increase versus the previous period?",
 ];
 type Page = HeaderPage;
-type AppRoute = { page: Page; incidentId?: string };
+type AppRoute = { page: Page; incidentId?: string; investigation?: boolean };
 const pageHashes: Record<Page, string> = {
   "Overview": "#/overview", "Live Operations": "#/operations", "Incident Center": "#/incidents",
   "AI Analyst": "#/scout", "Pipeline": "#/pipeline",
 };
 function currentRoute(): AppRoute {
   const hash = window.location.hash;
+  const scout = /^#\/scout\/incidents(?:\/([^/]+))?$/.exec(hash);
+  if (scout) return { page: "AI Analyst", investigation: true, incidentId: scout[1] };
   const detail = /^#\/incidents\/([^/]+)$/.exec(hash);
   if (detail) return { page: "Incident Center", incidentId: detail[1] };
   const page = (Object.keys(pageHashes) as Page[]).find(value => pageHashes[value] === hash);
@@ -53,7 +59,7 @@ function Notice({ error }: { error: APIError }) {
     <InlineNotification
       kind={error.status === 429 ? "warning" : "error"}
       title={error.status === 429 ? "Analysis paused" : "Request unavailable"}
-      subtitle={error.message}
+      subtitle={error.code === "SRE_DISABLED" ? "SRE investigation is disabled on this backend. Infrastructure analytics remain available." : error.message}
       hideCloseButton
       lowContrast
     />
@@ -209,29 +215,47 @@ export function AIAnalyst({
   context,
   state,
   contextLoading = false,
+  investigation = false,
+  incidentId,
+  onScopeChange,
 }: {
   client: APIClient;
   context: Context;
   state: string;
   contextLoading?: boolean;
+  investigation?: boolean;
+  incidentId?: string;
+  onScopeChange?: (incidents: boolean) => void;
 }) {
-  const [question, setQuestion] = useState("");
+  const [question, setQuestion] = useState(investigation && incidentId ? "Investigate this incident: explain the HTTP observations, lifecycle events, and recovery verification. Distinguish historical recovery from current health." : "");
+  const [selectedId, setSelectedId] = useState(incidentId ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<APIError | null>(null);
   const [result, setResult] = useState<{
     response: AIResponse;
-    context: Context;
+    context: Context | IncidentContext;
     state: string;
   } | null>(null);
+  const selectedContext: Context | IncidentContext = investigation
+    ? { analysis_scope: "incidents", ...(selectedId.trim() ? { incident_id: selectedId.trim() } : {}) }
+    : context;
+  const invalidId = investigation && !!selectedId.trim() && !isUUID(selectedId.trim());
+  const suggestions = investigation ? [
+    "List recorded incidents and their lifecycle status.",
+    "Which HTTP observations support this incident?",
+    "Explain the recorded lifecycle events for this incident.",
+    "Was recovery verified, and does that establish current health?",
+    "What remains unknown from the recorded evidence?",
+  ] : SUGGESTIONS;
   async function analyze() {
-    if (!question.trim() || busy || contextLoading) return;
+    if (!question.trim() || busy || contextLoading || invalidId) return;
     setBusy(true);
     setError(null);
     setResult(null);
     try {
       setResult({
-        response: await client.ask(question, context),
-        context: { ...context },
+        response: await client.ask(question, selectedContext),
+        context: { ...selectedContext },
         state,
       });
     } catch (e) {
@@ -250,6 +274,17 @@ export function AIAnalyst({
       <div className="analyst-layout scout-layout">
         <div>
           <Tile className="composer">
+            <Select id="scout-scope" labelText="Investigation scope" value={investigation ? "incidents" : "analytics"}
+              disabled={busy} onChange={event => onScopeChange?.(event.target.value === "incidents")}>
+              <SelectItem value="analytics" text="Infrastructure analytics" />
+              <SelectItem value="incidents" text="Recorded SRE incidents" />
+            </Select>
+            {investigation && <>
+              <p className="support sre-space">Read-only sandbox investigation of a controlled application-dependency HTTP 503 exercise, not a storage outage. No new probes or recovery actions run.</p>
+              <TextInput id="scout-incident" labelText="Incident ID (optional for listing)" value={selectedId}
+                invalid={invalidId} invalidText="Enter a valid incident UUID." disabled={busy}
+                onChange={event => setSelectedId(event.target.value)} />
+            </>}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -271,7 +306,7 @@ export function AIAnalyst({
                 <Button
                   type="submit"
                   renderIcon={ArrowRight}
-                  disabled={!question.trim() || busy || contextLoading}
+                  disabled={!question.trim() || busy || contextLoading || invalidId}
                 >
                   Analyze
                 </Button>
@@ -295,10 +330,10 @@ export function AIAnalyst({
                 <div className="feature-label">
                   <CheckmarkOutline size={20} /> ANALYST ASSESSMENT
                 </div>
-                <Tag type="blue">{result.context.mode}</Tag>
+                <Tag type="blue">{"analysis_scope" in result.context ? "Recorded incidents" : result.context.mode}</Tag>
               </div>
               <AnalystAnswer answer={result.response.answer} />
-              {JSON.stringify(result.context) !== JSON.stringify(context) && (
+              {JSON.stringify(result.context) !== JSON.stringify(selectedContext) && (
                 <p className="note">
                   This answer belongs to an earlier context. Submit again to
                   analyze the current selection.
@@ -318,35 +353,36 @@ export function AIAnalyst({
                     <dt>Reference time</dt>
                     <dd>{date(evidence.reference_time)}</dd>
                   </div>
-                  <div>
+                  {!("analysis_scope" in result.context) && <div>
                     <dt>Analysis window</dt>
                     <dd>
                       {date(evidence.window.start)} →{" "}
                       {date(evidence.window.end)}
                     </dd>
-                  </div>
+                  </div>}
                   <div>
                     <dt>Freshness</dt>
                     <dd>
-                      {result.state} ·{" "}
+                      {"analysis_scope" in result.context ? "Server assessment reference" : result.state} ·{" "}
                       {String(
                         evidence.freshness.threshold_seconds ?? "Not available",
                       )}
                       s threshold
                     </dd>
                   </div>
-                  <div>
+                  {evidence.currency !== null && <div>
                     <dt>Currency</dt>
                     <dd>{evidence.currency}</dd>
-                  </div>
+                  </div>}
                 </dl>
-                <CoverageEvidence coverage={evidence.coverage} />
+                {"analysis_scope" in result.context
+                  ? <p className="support">This saved answer describes evidence at the server reference time. Observations age after 15 seconds; submit again to reassess stored evidence. Historical verified recovery does not establish current health.</p>
+                  : <CoverageEvidence coverage={evidence.coverage} />}
               </div>
               <Accordion>
                 <AccordionItem title="Evidence" open={false}>
                   <p className="support">
-                    Approved tool results and technical provenance. Monetary
-                    values remain exact strings.
+                    Approved tool results and technical provenance. Values are recorded evidence, not new measurements.
                   </p>
                   {evidence.tool_results.map((t, i) => (
                     <div className="tool-detail" key={t.tool + i}>
@@ -367,7 +403,7 @@ export function AIAnalyst({
         <aside className="suggestions">
           <div className="section-label">TRY ASKING</div>
           <p className="support">Pick a question to get started.</p>
-          {SUGGESTIONS.map((q, i) => (
+          {suggestions.map((q, i) => (
             <button
               key={q}
               className="suggestion"
@@ -533,6 +569,8 @@ export default function App() {
   const [route, setRoute] = useState<AppRoute>(currentRoute);
   const page = route.page;
   const srePage = page === "Live Operations" || page === "Incident Center";
+  const incidentScout = page === "AI Analyst" && !!route.investigation;
+  const storedPage = srePage || incidentScout;
   const [sreBusy, setSREBusy] = useState(false);
   const [context, setContext] = useState(live);
   const [refreshVersion, setRefreshVersion] = useState(0);
@@ -565,7 +603,7 @@ export default function App() {
     setData(null);
     setRegions([]);
     setRuns([]);
-    if (srePage) {
+    if (storedPage) {
       setBusy(false);
       return () => { generation.current++; };
     }
@@ -602,18 +640,18 @@ export default function App() {
     return () => {
       generation.current++;
     };
-  }, [client, page, refreshVersion]);
+  }, [client, page, incidentScout, refreshVersion]);
   return (
     <div className="app-shell">
       <AppHeader
-        page={page} referenceTime={context.reference_time} busy={srePage ? sreBusy : busy}
+        page={page} referenceTime={context.reference_time} busy={srePage ? sreBusy : busy} storedEvidence={incidentScout}
         onNavigate={next => navigate(next)}
         onRefresh={() => setRefreshVersion(v => v + 1)}
       />
       <main>
         <div className="workspace">
-          {!srePage && error && <Notice error={error} />}{" "}
-          {!srePage && busy && (
+          {!storedPage && error && <Notice error={error} />}{" "}
+          {!storedPage && busy && (
             <div className="loading-panel">
               <InlineLoading description="Loading infrastructure analytics…" />
               <SkeletonText paragraph lineCount={5} />
@@ -633,10 +671,18 @@ export default function App() {
             }} />}
           {page === "AI Analyst" && (
             <AIAnalyst
+              key={String(incidentScout) + (route.incidentId ?? "")}
               client={client}
               context={context}
               state={data ? telemetryState(data) : "NOT ASSESSED"}
-              contextLoading={busy}
+              contextLoading={incidentScout ? false : busy}
+              investigation={incidentScout}
+              incidentId={route.incidentId}
+              onScopeChange={incidents => {
+                const hash = incidents ? "#/scout/incidents" : "#/scout";
+                window.history.pushState(null, "", hash);
+                setRoute({ page: "AI Analyst", investigation: incidents });
+              }}
             />
           )}
           {!srePage && data && page !== "AI Analyst" && (

@@ -105,6 +105,12 @@ class RecoveryView(FromAttributes):
     finished_at: datetime | None
 
 
+class DiagnosticEvidence(StrictRequest):
+    run: RunView
+    probes: list[ProbeView]
+    recovery_attempts: list[RecoveryView]
+
+
 class Metadata(BaseModel):
     request_id: UUID
     total: int | None = None

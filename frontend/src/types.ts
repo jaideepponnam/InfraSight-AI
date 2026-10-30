@@ -101,6 +101,10 @@ export interface ToolEvidence {
   result: Record<string, unknown>;
   warnings: string[];
 }
+export interface IncidentContext {
+  analysis_scope: "incidents";
+  incident_id?: string;
+}
 export interface AIResponse {
   answer: string;
   request_id: string;
@@ -110,7 +114,7 @@ export interface AIResponse {
     window: Record<string, string | null>;
     freshness: Record<string, unknown>;
     coverage: Record<string, unknown>[];
-    currency: string;
+    currency: string | null;
     tool_results: ToolEvidence[];
   };
 }

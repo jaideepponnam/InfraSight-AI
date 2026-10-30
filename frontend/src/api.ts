@@ -1,5 +1,6 @@
 import type {
   AIResponse,
+  IncidentContext,
   AverageHealth,
   DemoETLResult,
   Context,
@@ -84,7 +85,17 @@ export function query(context: Context) {
     freshness_seconds: String(context.freshness_seconds),
   }).toString();
 }
-export function aiBody(question: string, context: Context) {
+type AnalyticsBody = Omit<Context, "mode"> & { question: string };
+type IncidentBody = IncidentContext & { question: string };
+export function aiBody(question: string, context: Context): AnalyticsBody;
+export function aiBody(question: string, context: IncidentContext): IncidentBody;
+export function aiBody(question: string, context: Context | IncidentContext): AnalyticsBody | IncidentBody;
+export function aiBody(question: string, context: Context | IncidentContext) {
+  if ("analysis_scope" in context) {
+    if (context.incident_id && !isUUID(context.incident_id)) throw new APIError(422);
+    return { question: question.trim(), analysis_scope: "incidents" as const,
+      ...(context.incident_id ? { incident_id: context.incident_id.toLowerCase() } : {}) };
+  }
   const { mode: _mode, ...scope } = context;
   return { question: question.trim(), ...scope };
 }
@@ -131,7 +142,7 @@ export class APIClient {
       });
       if (!response.ok) {
         let code: "SRE_DISABLED" | undefined;
-        if (path.startsWith("sre/")) {
+        if (path.startsWith("sre/") || path === "ai/query") {
           try {
             const payload = await response.json();
             if (payload?.error?.code === "SRE_DISABLED") code = "SRE_DISABLED";
@@ -221,7 +232,7 @@ export class APIClient {
   demoETL() {
     return this.request<Envelope<DemoETLResult>>("demo/etl/run", {}, "envelope");
   }
-  ask(question: string, context: Context) {
+  ask(question: string, context: Context | IncidentContext) {
     return this.request<AIResponse>("ai/query", aiBody(question, context));
   }
 }

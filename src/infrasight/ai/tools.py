@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from infrasight.ai.provider import AIError
+from infrasight.ai.sre_tools import SREToolset
 from infrasight.analytics.schemas import (
     Comparison,
     CpuThreshold,
@@ -132,10 +133,13 @@ TOOLS = {
 
 
 class ToolRegistry:
-    def __init__(self, service, settings, context):
+    def __init__(self, service, settings, context, sre_queries=None):
         self.service, self.settings, self.context = service, settings, context
+        self.sre = SREToolset(sre_queries, settings, context)
 
     def schemas(self):
+        if self.context.analysis_scope == "incidents":
+            return self.sre.schemas()
         schemas = []
         for name, tool in TOOLS.items():
             schema = tool.arguments.model_json_schema()
@@ -150,8 +154,7 @@ class ToolRegistry:
                 schema["properties"].pop(field, None)
             if "required" in schema:
                 schema["required"] = [
-                    field for field in schema["required"]
-                    if field not in context_controlled
+                    field for field in schema["required"] if field not in context_controlled
                 ]
             # Keep the complete typed contract visible; execution still freezes context.
             context_defaults = {
@@ -188,6 +191,8 @@ class ToolRegistry:
         return schemas
 
     def execute(self, name, arguments):
+        if self.context.analysis_scope == "incidents":
+            return self.sre.execute(name, arguments)
         tool = TOOLS.get(name)
         if tool is None:
             raise AIError("AI_UNKNOWN_TOOL")
@@ -286,6 +291,11 @@ class ToolRegistry:
 def metadata(result: dict[str, Any]):
     """Expose backend-supplied evidence; never calculate new business measures."""
     coverage, freshness = [], {"threshold_seconds": result["parameters"]["freshness_seconds"]}
+    if result.get("domain") == "incidents":
+        freshness["assessments"] = [
+            row["assessment"] for row in result["rows"] if "assessment" in row
+        ]
+        return freshness, coverage
     summary_rows = [result["fleet_summary"]] if "fleet_summary" in result else []
     for row in [*summary_rows, *result["rows"]]:
         selected = {k: v for k, v in row.items() if "coverage" in k and not isinstance(v, dict)}
