@@ -17,6 +17,7 @@ import {
 } from "@carbon/icons-react";
 import { APIClient, APIError, contextForRun, live } from "./api";
 import { HealthPanel } from "./HealthPanel";
+import { StorageOperations } from "./StorageOperations";
 import { AppHeader, type HeaderPage } from "./AppHeader";
 import { DemoETLAction } from "./DemoETLAction";
 import { DatabaseSample } from "./DatabaseSample";
@@ -537,7 +538,9 @@ export default function App() {
       const selected = contextForRun(latest);
       if (id !== generation.current) return;
       setContext(selected);
-      if (page === "Overview") {
+      if (page === "Storage Operations") {
+        // Node inventory and details load in StorageOperations directly.
+      } else if (page === "Overview") {
         const [o, r] = await Promise.all([client.overview(selected), client.regions(selected)]);
         if (id === generation.current) { setData(o.data); setRegions(r.data); }
       } else if (page === "Pipeline") {
@@ -585,6 +588,7 @@ export default function App() {
           {!busy && !error && page === "Overview" && data && (
             <OverviewView data={data} regions={regions} context={context} client={client} />
           )}
+          {!busy && !error && page === "Storage Operations" && <StorageOperations client={client} context={context} />}
           {!busy && !error && page === "Pipeline" && <Pipeline runs={runs} client={client} onRefresh={async () => {
               const id = generation.current;
               const [result, latest] = await Promise.all([client.runs(context), client.latestSuccessfulRun(context.source_id)]);
