@@ -86,12 +86,12 @@ function OverviewView({
   return (
     <>
       <Heading
-        title="Infrastructure Intelligence"
-        subtitle="Cloud infrastructure health, utilization and cost intelligence."
+        title="Infrastructure Operations Command Center"
+        subtitle="Simulated infrastructure telemetry for reliability triage, capacity awareness, and operational investigation."
       />
       <div className="kpi-grid">
         <Metric
-          label="Total servers"
+          label="Monitored servers"
           value={data.inventory_servers}
           note="Registered inventory"
         />
@@ -102,9 +102,9 @@ function OverviewView({
           tone="healthy"
         />
         <Metric
-          label="Critical"
+          label="Critical health"
           value={data.critical_servers}
-          note="Requires investigation"
+          note="Investigate affected infrastructure"
           tone="critical"
         />
         <Metric
@@ -114,7 +114,7 @@ function OverviewView({
           tone="analytical"
         />
         <Metric
-          label="Observed cost"
+          label="Observed infrastructure cost"
           value={money(data.observed_cost, context.currency)}
           note="Selected observation intervals"
         />
