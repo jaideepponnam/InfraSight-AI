@@ -1365,3 +1365,11 @@ nav button[aria-current="page"] svg {color: #0f62fe;}
 .health-controls .cds--select-input {height: 32px; min-height: 32px; font-size: 12px; padding-left: 10px; padding-right: 28px;}
 .health-controls .cds--select__arrow {right: 8px;}
 .health-controls > .cds--tag, .panel-title .cds--tag--sm {font-size: 11px;}
+
+/* Storage SRE read-only investigation view */
+.storage-operations { display: grid; gap: 24px; }
+.storage-detail h3 { margin: 8px 0; }
+.storage-metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 12px; margin: 20px 0; }
+.storage-metric-grid > div { background: #f4f4f4; border: 1px solid #e0e0e0; padding: 16px; display: grid; gap: 8px; }
+.storage-metric-grid small { color: #525252; }
+.storage-metric-grid strong { font-size: 21px; overflow-wrap: anywhere; }
