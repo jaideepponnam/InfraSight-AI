@@ -138,3 +138,21 @@ export interface AverageHealth {
   coverage_fraction: Numeric;
   health_overlap_detected: boolean;
 }
+
+export interface StorageServer {
+  server_id: string;
+  server_name: string;
+  source_id: string;
+  region_code: string;
+  environment: string;
+  last_seen_at: string | null;
+}
+export interface StorageServerDetail extends StorageServer {
+  latest_telemetry: {
+    effective_health?: string | null;
+    observed_at?: string | null;
+    cpu_usage_percent?: Numeric;
+    memory_usage_percent?: Numeric;
+    storage_usage_percent?: Numeric;
+  } | null;
+}
