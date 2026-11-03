@@ -7,6 +7,8 @@ import type {
   Overview,
   Region,
   Run,
+  StorageServer,
+  StorageServerDetail,
 } from "./types";
 export const RATE_LIMIT_MESSAGE =
   "AI analysis is temporarily rate limited. Existing infrastructure analytics remain available. Please retry shortly.";
@@ -143,6 +145,13 @@ export class APIClient {
     } finally {
       clearTimeout(timer);
     }
+  }
+  storageServers(sourceId: string) {
+    return this.request<Envelope<StorageServer[]>>("servers?" + new URLSearchParams({ source_id: sourceId, limit: "100" }));
+  }
+  storageServer(id: string, context: Context) {
+    return this.request<Envelope<StorageServerDetail>>("servers/" + encodeURIComponent(id) + "?" +
+      new URLSearchParams({ source_id: context.source_id, as_of: context.reference_time, freshness_seconds: String(context.freshness_seconds) }));
   }
   averageHealth(context: Context) {
     return this.request<Envelope<AverageHealth[]>>("analytics/average-health?" + query(context));
