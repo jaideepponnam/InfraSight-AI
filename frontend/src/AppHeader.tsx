@@ -2,7 +2,7 @@ import { Button, Tag } from "@carbon/react";
 import { Renew } from "@carbon/icons-react";
 import { date } from "./format";
 
-const pages = ["Overview", "AI Analyst", "Pipeline"] as const;
+const pages = ["Overview", "Storage Operations", "AI Analyst", "Pipeline"] as const;
 export type HeaderPage = typeof pages[number];
 
 export function AppHeader({ page, referenceTime, busy, onNavigate, onRefresh }: {
